@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>HAND CATCH — AI Webcam Hand-Tracking Arcade Game</title>
+  <meta name="description" content="A futuristic webcam-based arcade game where you catch falling neon energy columns with your real hands using real-time AI computer vision.">
+  <meta name="theme-color" content="#030612">
+
+  <!-- Futuristic Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Insecure Context / Local Server Warning Banner -->
+  <aside id="insecure-banner" role="alert" aria-live="assertive">
+    <span id="insecure-msg">Webcam and Vision Workers require a secure context (http://localhost or HTTPS).</span>
+  </aside>
+
+  <!-- Interactive Game Canvas (Hardware Accelerated 2D Context) -->
+  <canvas id="game-canvas"></canvas>
+
+  <!-- Status Pill (Always visible at bottom center) -->
+  <div class="status-pill-container">
+    <div id="status-pill" class="status-pill" role="status" aria-live="polite">
+      <span id="status-dot" class="status-dot amber"></span>
+      <span id="status-text" class="status-text">System Ready</span>
+    </div>
+  </div>
+
+  <!-- SCREEN 1: MAIN MENU / START SCREEN -->
+  <main id="screen-menu" class="ui-layer" role="region" aria-label="Main Menu">
+    <div class="glass-panel">
+      <header class="menu-header">
+        <h1 class="game-title">HAND CATCH</h1>
+        <p class="game-tagline">Use your hands to catch the falling columns.</p>
+      </header>
+
+      <div class="menu-grid">
+        <!-- Left Column: Game Settings & Camera Privacy -->
+        <div class="menu-section">
+          <div class="section-label">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            Game Mode
+          </div>
+
+          <div class="segmented-control" role="radiogroup" aria-label="Game Mode">
+            <input type="radio" id="mode-normal" name="game-mode" value="NORMAL" checked>
+            <label for="mode-normal">NORMAL (60s)</label>
+
+            <input type="radio" id="mode-endless" name="game-mode" value="ENDLESS">
+            <label for="mode-endless">ENDLESS</label>
+          </div>
+
+          <div class="name-input-group">
+            <label for="input-player-name">Player Call-Sign</label>
+            <input type="text" id="input-player-name" maxlength="12" value="PLAYER" placeholder="PLAYER" autocomplete="off" spellcheck="false">
+          </div>
+
+          <div class="camera-privacy-box">
+            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15h2v2h-2zm0-10h2v8h-2z"/></svg>
+            <div>
+              <strong>Camera Privacy:</strong> Video is processed 100% locally in your browser by AI vision models. No camera feed is ever recorded or uploaded.
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Gameplay Instructions -->
+        <div class="menu-section">
+          <div class="section-label">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            Flight Manual
+          </div>
+
+          <div class="instructions-list">
+            <div class="instruction-item">
+              <div class="instruction-icon">
+                <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              </div>
+              <div>Stand 1–2 meters away with good lighting and raise your hands.</div>
+            </div>
+
+            <div class="instruction-item">
+              <div class="instruction-icon">
+                <svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
+              </div>
+              <div>Catch falling neon columns before they hit the lower floor threshold.</div>
+            </div>
+
+            <div class="instruction-item">
+              <div class="instruction-icon">
+                <svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              </div>
+              <div>Build combos without missing to multiply score up to <strong>x10</strong>!</div>
+            </div>
+
+            <div class="instruction-item">
+              <div class="instruction-icon">
+                <svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+              </div>
+              <div>You have 3 lives (♥ ♥ ♥). Missing normal columns loses a life. Catch hearts to restore!</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Start Action & Auxiliary Controls -->
+      <div class="menu-actions">
+        <button id="btn-start-game" class="btn-primary-glow dwell-btn" type="button">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          START GAME
+        </button>
+
+        <div class="controls-bar">
+          <button id="btn-sound-toggle" class="btn-tool" type="button" aria-label="Toggle Sound">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+            Sound: ON
+          </button>
+
+          <button id="btn-debug-toggle" class="btn-tool" type="button" aria-label="Toggle Debug Mode">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 0 0-4 4v2H6a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h2v4a4 4 0 0 0 8 0v-4h2a2 2 0 0 0 2-2v-2a2 2 0 0 0-2-2h-2V6a4 4 0 0 0-4-4z"/></svg>
+            Debug [D]
+          </button>
+
+          <button id="btn-motion-toggle" class="btn-tool" type="button" aria-label="Toggle Reduced Motion">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
+            Reduce Motion
+          </button>
+
+          <button id="btn-fullscreen" class="btn-tool" type="button" aria-label="Toggle Fullscreen">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+            Fullscreen
+          </button>
+        </div>
+      </div>
+
+      <!-- Top 5 Leaderboard Card -->
+      <div class="leaderboard-card">
+        <div class="leaderboard-header">
+          <div class="section-label" style="margin-bottom:0;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.45 1-1 1H7.5c-.55 0-1-.45-1-1v-2.34"/><path d="M18 14.66V17c0 .55-.45 1-1 1h-1.5c-.55 0-1-.45-1-1v-2.34"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2z"/></svg>
+            Top Pilots
+          </div>
+          <button id="btn-clear-leaderboard" class="btn-danger-text" type="button">CLEAR LEADERBOARD</button>
+        </div>
+        <ul id="leaderboard-list" class="leaderboard-list"></ul>
+      </div>
+    </div>
+  </main>
+
+  <!-- SCREEN 2: COUNTDOWN OVERLAY -->
+  <div id="screen-countdown" class="ui-layer" style="display: none;" aria-live="assertive">
+    <div class="countdown-box">
+      <div id="countdown-number" class="countdown-num">3</div>
+      <div class="countdown-tip">Raise both hands to position!</div>
+    </div>
+  </div>
+
+  <!-- SCREEN 3: PAUSED OVERLAY -->
+  <div id="screen-paused" class="ui-layer" style="display: none;" role="dialog" aria-modal="true" aria-label="Game Paused">
+    <div class="glass-panel card-center">
+      <h2 class="modal-title">GAME PAUSED</h2>
+      <p id="pause-reason" class="modal-subtitle">Tracking Lost / Tab Hidden</p>
+
+      <div class="btn-group">
+        <button id="btn-resume" class="btn-primary-glow dwell-btn" type="button">RESUME</button>
+        <button id="btn-pause-menu" class="btn-secondary dwell-btn" type="button">MAIN MENU</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCREEN 4: GAME OVER OVERLAY -->
+  <div id="screen-game-over" class="ui-layer" style="display: none;" role="dialog" aria-modal="true" aria-label="Game Over">
+    <div class="glass-panel card-center">
+      <div id="go-new-record" class="badge-new-record" style="display: none;">NEW HIGH SCORE!</div>
+      <h2 class="modal-title">MISSION DEBRIEF</h2>
+      <p class="modal-subtitle">Simulation Terminated</p>
+
+      <div class="stat-item" style="margin-bottom: 16px;">
+        <div class="stat-lbl">FINAL SCORE</div>
+        <div id="go-final-score" class="stat-val" style="font-size: 44px; color: var(--neon-cyan);">0000</div>
+      </div>
+
+      <div class="go-stats-grid">
+        <div class="stat-item">
+          <div class="stat-lbl">MAX COMBO</div>
+          <div id="go-max-combo" class="stat-val" style="color: var(--neon-magenta);">x0</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-lbl">COLUMNS CAUGHT</div>
+          <div id="go-caught" class="stat-val">0 / 0</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-lbl">ACCURACY</div>
+          <div id="go-accuracy" class="stat-val">0%</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-lbl">MODE</div>
+          <div id="go-mode-badge" class="stat-val" style="font-size: 18px; color: var(--neon-gold);">NORMAL</div>
+        </div>
+      </div>
+
+      <div class="btn-group">
+        <button id="btn-play-again" class="btn-primary-glow dwell-btn" type="button">PLAY AGAIN</button>
+        <button id="btn-game-over-menu" class="btn-secondary dwell-btn" type="button">MAIN MENU</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCREEN 5: ERROR MODAL -->
+  <div id="screen-error" class="ui-layer" style="display: none;" role="alertdialog" aria-modal="true" aria-labelledby="error-title">
+    <div class="glass-panel card-center">
+      <h2 id="error-title" class="modal-title" style="color: var(--neon-crimson);">Camera Access Error</h2>
+      <p id="error-desc" class="modal-subtitle">Webcam access is required for AI hand tracking.</p>
+
+      <ol id="error-steps" class="error-steps-list"></ol>
+
+      <div class="btn-group">
+        <button id="btn-retry-error" class="btn-primary-glow dwell-btn" type="button">RETRY</button>
+        <button id="btn-error-menu" class="btn-secondary dwell-btn" type="button">BACK TO MENU</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Game ES Module Bootstrap -->
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+# ── Node / NPM ──────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ── Next.js ──────────────────────────────────────────────────────────────
+hand-catch/frontend/.next/
+hand-catch/frontend/out/
+
+# ── Python / FastAPI ─────────────────────────────────────────────────────
+hand-catch/backend/.venv/
+hand-catch/backend/__pycache__/
+hand-catch/backend/**/__pycache__/
+hand-catch/backend/**/*.pyc
+hand-catch/backend/**/*.pyo
+hand-catch/backend/*.egg-info/
+hand-catch/backend/dist/
+hand-catch/backend/build/
+
+# ── Environment / secrets ─────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.env
+
+# ── OS artifacts ──────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Editor ────────────────────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+
+# ── Database (SQLite) ─────────────────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3

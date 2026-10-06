@@ -1,0 +1,22 @@
+{
+  "name": "esperanza-welcome-day-project",
+  "version": "1.0.0",
+  "description": "HAND CATCH — AI Webcam Hand-Tracking Arcade Game",
+  "scripts": {
+    "dev": "npm --prefix hand-catch/frontend run dev",
+    "build": "npm --prefix hand-catch/frontend run build",
+    "start": "npm --prefix hand-catch/frontend run start",
+    "lint": "npm --prefix hand-catch/frontend run lint",
+    "serve:vanilla": "python -m http.server 8080"
+  },
+  "keywords": [
+    "arcade-game",
+    "mediapipe",
+    "hand-tracking",
+    "nextjs",
+    "react",
+    "fastapi"
+  ],
+  "author": "",
+  "license": "MIT"
+}
