@@ -26,7 +26,7 @@ export class ScoreSystem {
   // Reaction time samples (in seconds)
   public reactionTimes: number[] = [];
   public averageReactionTime: number = 0.42;
-  public bestReactionTime: number = 0.42;
+  public bestReactionTime: number | undefined = undefined;
 
   // Milestone triggers
   private static readonly MILESTONES = [5, 10, 20, 30, 50, 75, 100];
@@ -44,7 +44,7 @@ export class ScoreSystem {
     this.highestLevelNumber = 1;
     this.reactionTimes = [];
     this.averageReactionTime = 0.42;
-    this.bestReactionTime = 999;
+    this.bestReactionTime = undefined;
   }
 
   public recordLevel(levelNum: number, name: string, subtitle: string): void {
@@ -84,7 +84,8 @@ export class ScoreSystem {
     if (spawnTime > 0) {
       const reactionSec = Math.max(0.10, Math.min(1.8, (catchTime - spawnTime) / 1000));
       this.reactionTimes.push(reactionSec);
-      if (reactionSec < this.bestReactionTime) {
+      // FIX BUG-001: was `if (reactionSec < this.bestReactionTime)` — null < number is always false
+      if (this.bestReactionTime === undefined || reactionSec < this.bestReactionTime) {
         this.bestReactionTime = Math.round(reactionSec * 100) / 100;
       }
       if (this.reactionTimes.length > 25) this.reactionTimes.shift();

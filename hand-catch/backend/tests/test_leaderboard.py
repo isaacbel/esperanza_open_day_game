@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 from app.main import app
+from app.config import settings
 
 client = TestClient(app)
 
@@ -22,6 +23,24 @@ def test_get_leaderboard_endless():
     for item in data:
         assert item["mode"] == "ENDLESS"
 
+def test_get_leaderboard_survival():
+    response = client.get("/api/leaderboard?mode=SURVIVAL&limit=5")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) > 0
+    for item in data:
+        assert item["mode"] == "SURVIVAL"
+
+def test_get_leaderboard_nightmare():
+    response = client.get("/api/leaderboard?mode=NIGHTMARE&limit=5")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) > 0
+    for item in data:
+        assert item["mode"] == "NIGHTMARE"
+
 def test_submit_valid_score():
     payload = {
         "playerName": "TESTER",
@@ -39,9 +58,25 @@ def test_submit_valid_score():
     assert data["score"] == 450
     assert data["maxCombo"] == 8
 
+def test_submit_survival_score():
+    payload = {
+        "playerName": "SURVIVOR",
+        "score": 1200,
+        "maxCombo": 18,
+        "caught": 40,
+        "missed": 1,
+        "accuracy": 97.5,
+        "mode": "SURVIVAL"
+    }
+    response = client.post("/api/leaderboard", json=payload)
+    assert response.status_code == 201
+    data = response.json()
+    assert data["playerName"] == "SURVIVOR"
+    assert data["mode"] == "SURVIVAL"
+
 def test_sanitize_player_name():
     payload = {
-        "playerName": "<script>alert('bad');</script>PLAYER_ONE",
+        "playerName": "<script>alert('bad');</script>PILOT",
         "score": 100,
         "maxCombo": 2,
         "caught": 5,
@@ -52,9 +87,10 @@ def test_sanitize_player_name():
     response = client.post("/api/leaderboard", json=payload)
     assert response.status_code == 201
     data = response.json()
-    # Script brackets and symbols are stripped, capped at 12 characters
     assert "<" not in data["playerName"]
     assert ">" not in data["playerName"]
+    assert "(" not in data["playerName"]
+    assert "'" not in data["playerName"]
     assert len(data["playerName"]) <= 12
 
 def test_reject_impossible_score():
@@ -69,3 +105,24 @@ def test_reject_impossible_score():
     }
     response = client.post("/api/leaderboard", json=payload)
     assert response.status_code == 422
+
+def test_reject_zero_caught_with_score():
+    payload = {
+        "playerName": "HACKER",
+        "score": 50000,
+        "maxCombo": 0,
+        "caught": 0, # zero catches with score > 0 is cheating
+        "missed": 5,
+        "accuracy": 0.0,
+        "mode": "NORMAL"
+    }
+    response = client.post("/api/leaderboard", json=payload)
+    assert response.status_code == 422
+
+def test_reset_leaderboard_with_admin_key():
+    headers = {"X-Admin-Key": settings.admin_key}
+    response = client.delete("/api/leaderboard?mode=SURVIVAL", headers=headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["mode"] == "SURVIVAL"

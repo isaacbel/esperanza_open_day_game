@@ -13,8 +13,8 @@ def get_health(db: Session = Depends(get_db)):
     db_status = "healthy"
     try:
         db.execute(text("SELECT 1"))
-    except Exception as e:
-        db_status = f"unhealthy: {str(e)}"
+    except Exception:
+        db_status = "unhealthy"
 
     return HealthResponse(
         status="ok" if db_status == "healthy" else "degraded",
@@ -22,3 +22,4 @@ def get_health(db: Session = Depends(get_db)):
         database=db_status,
         timestamp=datetime.now(timezone.utc)
     )
+

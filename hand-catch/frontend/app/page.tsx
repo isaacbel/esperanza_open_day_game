@@ -559,26 +559,33 @@ export default function HandCatchPage() {
                 type="button"
                 className="btn-primary-glow"
                 onClick={() => {
+                  // FIX BUG-003: use proper countdown → PLAYING flow, not engine.start() + setTimeout race
+                  const engine = engineRef.current;
+                  if (!engine) return;
                   setGameOverStats(null);
                   setIsNewRecord(false);
                   setHighlightScore(null);
+                  // Re-wire game-over callback for the next session
+                  engine.onGameOver = async (stats: GameOverStats) => {
+                    transitionTo('GAME_OVER');
+                    setGameOverStats(stats);
+                    const saved = await postScore(stats);
+                    if (saved) {
+                      setHighlightScore(saved.score);
+                      try {
+                        const cached = localStorage.getItem(`handCatch.leaderboard.${stats.mode}`);
+                        if (cached) {
+                          const arr = JSON.parse(cached) as LeaderboardItem[];
+                          if (!arr.length || stats.score > arr[0].score) setIsNewRecord(true);
+                        } else {
+                          setIsNewRecord(true);
+                        }
+                      } catch { /* ignore */ }
+                    }
+                  };
+                  // Trigger countdown — handleCountdownDone will call engine.start()
                   setShowCountdown(true);
                   transitionTo('COUNTDOWN');
-                  const engine = engineRef.current;
-                  if (engine) {
-                    engine.onGameOver = async (stats: GameOverStats) => {
-                      transitionTo('GAME_OVER');
-                      setGameOverStats(stats);
-                      const saved = await postScore(stats);
-                      if (saved) setHighlightScore(saved.score);
-                    };
-                    engine.start(mode, playerName);
-                    // Brief countdown overlay before engine takes control
-                    setTimeout(() => {
-                      setShowCountdown(false);
-                      transitionTo('PLAYING');
-                    }, 3100);
-                  }
                 }}
               >
                 ↩ Play Again

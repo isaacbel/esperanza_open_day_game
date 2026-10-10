@@ -951,7 +951,7 @@ body {
 /* ---------- Mode Grid Selector ---------- */
 .mode-grid-container {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
   margin-bottom: 8px;
 }
@@ -976,9 +976,9 @@ body {
 }
 
 .mode-card.selected {
-  background: rgba(0, 240, 255, 0.12);
-  border-color: var(--cyan);
-  box-shadow: 0 0 14px rgba(0, 240, 255, 0.25);
+  background: rgba(0, 240, 255, 0.10);
+  border-color: var(--mode-accent, var(--cyan));
+  box-shadow: 0 0 14px color-mix(in srgb, var(--mode-accent, var(--cyan)) 40%, transparent);
 }
 
 .mode-card.nightmare-card.selected {
@@ -999,15 +999,38 @@ body {
 
 .mode-title {
   font-family: var(--font-hud);
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   color: #ffffff;
 }
 
 .mode-sub {
-  font-size: 0.6rem;
+  font-size: 0.58rem;
   color: var(--text-muted);
+  line-height: 1.2;
+}
+
+.mode-desc {
+  font-size: 0.56rem;
+  color: rgba(180, 200, 230, 0.85);
+  line-height: 1.4;
+  margin-top: 2px;
+  animation: fadeIn 0.15s ease;
+}
+
+.mode-difficulty {
+  display: flex;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.mode-pip {
+  display: block;
+  width: 12px;
+  height: 3px;
+  border-radius: 2px;
+  transition: background 0.2s ease;
 }
 
 .mode-badge {
@@ -1015,7 +1038,7 @@ body {
   top: 4px;
   right: 6px;
   font-family: var(--font-hud);
-  font-size: 0.52rem;
+  font-size: 0.50rem;
   font-weight: 800;
   color: #ff2a5f;
   background: rgba(255, 42, 95, 0.18);

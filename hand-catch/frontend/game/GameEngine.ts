@@ -95,13 +95,17 @@ export class GameEngine {
   public start(mode: GameMode = 'NORMAL', playerName: string = 'PLAYER'): void {
     this.mode = mode;
     this.playerName = playerName;
-    this.lives = mode === 'ZEN' ? 99 : GAME_CONFIG.initialLives;
+    // ENDLESS mode = truly endless: 999 lives regenerated through play
+    this.lives = mode === 'ZEN' ? 99 : mode === 'ENDLESS' ? 999 : GAME_CONFIG.initialLives;
     this.timeRemaining = mode === 'TIME_ATTACK' ? 30 : GAME_CONFIG.gameDuration;
     this.elapsedTime = 0;
     this.level = 1;
     this.heartShakeTime = 0;
     this.timeDilationTimer = 0;
     this.grabCount = 0;
+
+    // FIX BUG-004: reset newly-unlocked list so previous session achievements don't leak
+    AchievementSystem.newlyUnlocked = [];
 
     this.scoreSystem.reset();
     this.columnRenderer.reset();
@@ -251,7 +255,7 @@ export class GameEngine {
     // Hazard / Bomb Hit (Costs 2 lives on direct touch)
     if (col.type === 'hazard') {
       this.scoreSystem.registerMiss();
-      if (this.mode !== 'ZEN' && this.mode !== 'TIME_ATTACK' && this.mode !== 'TUTORIAL') {
+      if (this.mode !== 'ZEN' && this.mode !== 'TIME_ATTACK' && this.mode !== 'TUTORIAL' && this.mode !== 'ENDLESS') {
         this.lives = Math.max(0, this.lives - 2);
       }
       audio.playMiss();
@@ -261,7 +265,7 @@ export class GameEngine {
       this.heartShakeTime = 0.6;
       this.particleSystem.addPopup(x, y, 'BOMB HIT!', '-2 LIVES', '#ff2a2a', true);
 
-      if (this.lives <= 0 && this.mode !== 'ZEN' && this.mode !== 'TIME_ATTACK' && this.mode !== 'TUTORIAL') {
+      if (this.lives <= 0 && this.mode !== 'ZEN' && this.mode !== 'TIME_ATTACK' && this.mode !== 'TUTORIAL' && this.mode !== 'ENDLESS') {
         this.triggerGameOver('DESTROYED BY HAZARD');
       }
       return;
@@ -410,7 +414,7 @@ export class GameEngine {
     const floorY = GAME_CONFIG.arena.floorY;
 
     if (col.type === 'normal' || col.type === 'fast') {
-      if (this.mode !== 'ZEN' && this.mode !== 'TIME_ATTACK' && this.mode !== 'TUTORIAL') {
+      if (this.mode !== 'ZEN' && this.mode !== 'TIME_ATTACK' && this.mode !== 'TUTORIAL' && this.mode !== 'ENDLESS') {
         this.lives = Math.max(0, this.lives - 1);
         this.heartShakeTime = 0.5;
         this.arenaRenderer.floorFlashAlpha = 1.0;
@@ -419,7 +423,7 @@ export class GameEngine {
       audio.playMiss();
       this.particleSystem.emitMiss(floorX, floorY);
 
-      if (this.lives <= 0 && this.mode !== 'ZEN' && this.mode !== 'TIME_ATTACK' && this.mode !== 'TUTORIAL') {
+      if (this.lives <= 0 && this.mode !== 'ZEN' && this.mode !== 'TIME_ATTACK' && this.mode !== 'TUTORIAL' && this.mode !== 'ENDLESS') {
         this.triggerGameOver('NO LIVES REMAINING');
       }
     } else {

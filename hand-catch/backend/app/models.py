@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Float, DateTime
+from sqlalchemy import Column, Integer, String, Float, DateTime, Index
 from .database import Base
 
 class Leaderboard(Base):
@@ -12,5 +12,10 @@ class Leaderboard(Base):
     caught = Column(Integer, nullable=False, default=0)
     missed = Column(Integer, nullable=False, default=0)
     accuracy = Column(Float, nullable=False, default=0.0)
-    mode = Column(String(10), nullable=False, default="NORMAL", index=True)
+    mode = Column(String(20), nullable=False, default="NORMAL", index=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    __table_args__ = (
+        Index("ix_leaderboard_mode_score", "mode", "score", "max_combo"),
+    )
+

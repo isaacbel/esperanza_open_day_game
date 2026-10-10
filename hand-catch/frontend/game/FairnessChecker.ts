@@ -27,10 +27,13 @@ export class FairnessChecker {
     activeColumns: FallingColumnData[],
     trackedHands: TrackedHandData[],
     difficulty: number,
-    lastSpawnX: number
+    lastSpawnX: number,
+    spawnY?: number   // FIX BUG-006: actual spawn Y (negative, off-screen)
   ): boolean {
     const floorY = GAME_CONFIG.arena.floorY;
-    const timeToFloor = Math.max(0.1, (floorY - 0) / vy);
+    // Correct distance from actual spawn y, not from 0
+    const fromY = spawnY ?? (-height - 15);
+    const timeToFloor = Math.max(0.1, (floorY - fromY) / vy);
 
     // 1. Reaction Time Floor Check
     const minReactionTime =

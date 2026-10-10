@@ -10,15 +10,26 @@ class LeaderboardCreate(BaseModel):
     caught: int = Field(0, ge=0, le=5000, description="Total columns caught")
     missed: int = Field(0, ge=0, le=1000, description="Total columns missed")
     accuracy: float = Field(0.0, ge=0.0, le=100.0, description="Catch accuracy percentage")
-    mode: Literal["NORMAL", "ENDLESS", "NIGHTMARE"] = Field("NORMAL", description="Game mode")
+    mode: Literal[
+        "NORMAL",
+        "SURVIVAL",
+        "TIME_ATTACK",
+        "ZEN",
+        "CHAOS",
+        "TWO_HANDS",
+        "NIGHTMARE",
+        "TRAINING",
+        "TUTORIAL",
+        "ENDLESS"
+    ] = Field("NORMAL", description="Game mode")
 
     @field_validator("playerName", mode="before")
     @classmethod
     def sanitize_player_name(cls, v: str) -> str:
         if not isinstance(v, str):
             return "PLAYER"
-        # Strip script tags, HTML brackets and symbols, trim and cap at 12 characters
-        clean = re.sub(r"[<>'\";\\/]", "", v).strip()
+        # Keep only alphanumeric, underscores, hyphens, and spaces; cap at 12 characters
+        clean = re.sub(r"[^A-Za-z0-9_\- ]", "", v).strip()
         if not clean:
             clean = "PLAYER"
         return clean[:12]

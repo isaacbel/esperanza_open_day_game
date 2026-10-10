@@ -71,6 +71,21 @@ export class SpawnDirector {
   public mode: GameMode = 'NORMAL';
   public playerModel: PlayerModel = new PlayerModel();
 
+  // ── Pattern Cooldown System (W-001) ─────────────────────────────────────────
+  // Tracks when each pattern last fired so the same pattern can't repeat too soon.
+  private patternCooldowns: Map<string, number> = new Map();
+  private readonly PATTERN_COOLDOWN_MS = 6000; // 6s minimum between same pattern
+  private patternHistory: PatternName[] = [];  // last 5 patterns for variety scoring
+
+  // ── Special Object Throttling (W-002) ────────────────────────────────────────
+  // Ensures special objects don't cluster — minimum gap between same type.
+  private lastSpecialObjectTime: Map<string, number> = new Map();
+  private readonly SPECIAL_OBJ_COOLDOWN_MS = 12000; // 12s between same special type
+
+  // ── Challenge Timing with Jitter (BUG-008) ───────────────────────────────────
+  private challenge30Window: number = 0; // randomized ~30s ± 8s
+  private challenge45Window: number = 0; // randomized ~45s ± 8s
+
   constructor() {
     this.checkStressModeFromUrl();
   }
@@ -107,6 +122,13 @@ export class SpawnDirector {
     this.tutorialStepTimer = performance.now() + 800;
     this.currentLevelDef = GAME_CONFIG.levels[0];
     this.playerModel.reset();
+    // Reset pattern cooldowns & variety tracking
+    this.patternCooldowns.clear();
+    this.patternHistory = [];
+    this.lastSpecialObjectTime.clear();
+    // Randomize challenge windows ±8s (BUG-008 fix)
+    this.challenge30Window = 28 + Math.random() * 6; // 28–34s
+    this.challenge45Window = 42 + Math.random() * 8; // 42–50s
   }
 
   private getInitialInterval(mode: GameMode): number {
@@ -115,6 +137,7 @@ export class SpawnDirector {
       case 'CHAOS': return 160;
       case 'TIME_ATTACK': return 320;
       case 'ZEN': return 950;
+      case 'ENDLESS': return 800;
       case 'TWO_HANDS': return 650;
       case 'TRAINING': return 1100;
       case 'TUTORIAL': return 1400;
@@ -139,17 +162,18 @@ export class SpawnDirector {
     this.currentLevelDef = this.evaluateLevelDef(elapsedSec, playerAccuracy, currentCombo, adaptiveDiff);
 
     // 2. Boss & Challenge Phase Triggers in 60s Games (NORMAL mode)
+    //    Windows use randomized ±8s offsets set in reset() — BUG-008 fix
     if (this.mode === 'NORMAL') {
-      // 30 Seconds: ⚠ RAPID BURST CHALLENGE (20 objects burst)
-      if (elapsedSec >= 29 && elapsedSec < 35 && !this.challenge30Triggered) {
+      // ~30 Seconds: ⚠ RAPID BURST CHALLENGE (window randomized 28–34s)
+      if (elapsedSec >= this.challenge30Window && !this.challenge30Triggered) {
         this.challenge30Triggered = true;
         this.activeChallengeName = '⚡ RAPID CHALLENGE ⚡';
         this.queuePattern('RAPID_BURST', adaptiveDiff, now);
         this.queuePattern('RANDOM_BURST', adaptiveDiff, now + 800);
       }
 
-      // 45 Seconds: ⚠ TWO HAND CHALLENGE
-      if (elapsedSec >= 44 && elapsedSec < 50 && !this.challenge45Triggered) {
+      // ~45 Seconds: ⚠ TWO HAND CHALLENGE (window randomized 42–50s)
+      if (elapsedSec >= this.challenge45Window && !this.challenge45Triggered) {
         this.challenge45Triggered = true;
         this.activeChallengeName = '👐 TWO-HAND ATTACK 👐';
         this.queuePattern('TWO_SIDE_ATTACK', adaptiveDiff, now);
@@ -285,8 +309,8 @@ export class SpawnDirector {
     if (this.mode === 'NIGHTMARE') return 1.0;
     if (this.mode === 'ZEN') return 0.15;
     if (this.mode === 'CHAOS') return 0.90;
-    if (this.mode === 'SURVIVAL') {
-      return Math.min(1.0, 0.2 + (elapsedSec / 100) * 0.8);
+    if (this.mode === 'SURVIVAL' || this.mode === 'ENDLESS') {
+      return Math.min(1.0, 0.15 + (elapsedSec / 120) * 0.85);
     }
     return DifficultySystem.getAdaptiveDifficulty(elapsedSec, accuracy, combo);
   }
@@ -454,9 +478,11 @@ export class SpawnDirector {
     combo: number,
     trackedHands: TrackedHandData[]
   ): PatternName {
+    const now = performance.now();
+
     if (this.mode === 'TWO_HANDS') {
       const dualPatterns: PatternName[] = ['TWO_SIDE_ATTACK', 'CENTER_SPLIT', 'CROSSING', 'ALTERNATING', 'FULL_WIDTH'];
-      return dualPatterns[Math.floor(Math.random() * dualPatterns.length)];
+      return this._pickWithCooldown(dualPatterns, now) ?? dualPatterns[0];
     }
 
     const activeHandsCount = Math.max(1, trackedHands.filter(h => h.active && !h.isGhost).length);
@@ -466,13 +492,45 @@ export class SpawnDirector {
       allowed.push('RAPID_BURST', 'CROSSING', 'RANDOM_BURST', 'TWO_SIDE_ATTACK');
     }
 
+    // Prefer dual patterns when two hands are active
     if (activeHandsCount >= 2 && (difficulty > 0.35 || this.mode === 'NIGHTMARE') && Math.random() > 0.4) {
       const dualPatterns: PatternName[] = ['TWO_SIDE_ATTACK', 'CENTER_SPLIT', 'CROSSING', 'ALTERNATING', 'FULL_WIDTH'];
-      return dualPatterns[Math.floor(Math.random() * dualPatterns.length)];
+      const picked = this._pickWithCooldown(dualPatterns, now);
+      if (picked) return picked;
     }
 
-    const randIdx = Math.floor(Math.random() * allowed.length);
-    return allowed[randIdx] || 'SINGLE';
+    // W-001 / BUG-007: cooldown-aware pattern selection
+    const cooledDown = allowed.filter(p => {
+      const lastUsed = this.patternCooldowns.get(p) ?? 0;
+      return now - lastUsed >= this.PATTERN_COOLDOWN_MS;
+    });
+
+    // Fall back to full list if all patterns are on cooldown (e.g. small allowed set)
+    const pool = cooledDown.length > 0 ? cooledDown : allowed;
+    const chosen = pool[Math.floor(Math.random() * pool.length)] || 'SINGLE';
+
+    // Record in cooldown map and history ring-buffer
+    this.patternCooldowns.set(chosen, now);
+    this.patternHistory.push(chosen);
+    if (this.patternHistory.length > 5) this.patternHistory.shift();
+
+    return chosen;
+  }
+
+  /** Pick a pattern from `candidates` respecting cooldowns. Returns null if all are cooling. */
+  private _pickWithCooldown(candidates: PatternName[], now: number): PatternName | null {
+    const available = candidates.filter(p => {
+      const lastUsed = this.patternCooldowns.get(p) ?? 0;
+      return now - lastUsed >= this.PATTERN_COOLDOWN_MS;
+    });
+    const pool = available.length > 0 ? available : candidates;
+    const chosen = pool[Math.floor(Math.random() * pool.length)];
+    if (chosen) {
+      this.patternCooldowns.set(chosen, now);
+      this.patternHistory.push(chosen);
+      if (this.patternHistory.length > 5) this.patternHistory.shift();
+    }
+    return chosen ?? null;
   }
 
   private queuePattern(pattern: PatternName, difficulty: number, nowMs: number): void {
@@ -491,6 +549,17 @@ export class SpawnDirector {
     const weakSide = this.playerModel.getChallengingSide();
 
     for (const item of items) {
+      // W-002: Special object throttling — skip if same special type spawned too recently
+      if (item.type !== 'normal' && item.type !== 'hazard') {
+        const lastUsed = this.lastSpecialObjectTime.get(item.type) ?? 0;
+        if (nowMs - lastUsed < this.SPECIAL_OBJ_COOLDOWN_MS) {
+          // Replace with a plain normal object so we don't lose the spawn slot
+          item.type = 'normal';
+        } else {
+          this.lastSpecialObjectTime.set(item.type, nowMs);
+        }
+      }
+
       let posX = item.x;
       if (weakSide === 'left' && posX > 640 && Math.random() > 0.5) {
         posX = 320 + Math.random() * 260;
@@ -525,7 +594,9 @@ export class SpawnDirector {
       : this.currentLevelDef.objectHeight;
 
     const width = Math.round(baseWidth * item.widthMultiplier);
-    const height = Math.round(baseHeight * item.widthMultiplier);
+    // FIX BUG-002: was using widthMultiplier for height — now each axis has its own multiplier
+    const heightMult = (item as { heightMultiplier?: number }).heightMultiplier ?? item.widthMultiplier;
+    const height = Math.round(baseHeight * heightMult);
 
     const baseSpeed = this.mode === 'NIGHTMARE'
       ? GAME_CONFIG.nightmare.baseFallSpeed
@@ -544,7 +615,8 @@ export class SpawnDirector {
         activeColumns,
         trackedHands,
         difficulty,
-        this.lastSpawnX
+        this.lastSpawnX,
+        -height - 15  // actual spawn Y (off-screen)
       );
       if (!isFair) {
         return false;
