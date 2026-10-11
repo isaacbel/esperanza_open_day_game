@@ -103,6 +103,7 @@ export default function HandCatchPage() {
   const [playerName, setPlayerName] = useState(
     () => gameStateManager.getPlayerName() || 'PLAYER'
   );
+  const [inputMode, setInputMode] = useState<'CAMERA' | 'MOUSE'>('CAMERA');
   const [isMuted, setIsMuted] = useState(() => {
     if (typeof window === 'undefined') return false;
     const val = localStorage.getItem('handCatch.muted');
@@ -224,13 +225,30 @@ export default function HandCatchPage() {
     await audio.init();
     if (isMuted) audio.setMuted(true);
 
+    // If mouse mode selected, bypass webcam completely
+    if (inputMode === 'MOUSE') {
+      handTracker.enableMouseTestMode(true);
+      engine.onGameOver = async (stats: GameOverStats) => {
+        transitionTo('GAME_OVER');
+        setGameOverStats(stats);
+        const saved = await postScore(stats);
+        if (saved) setHighlightScore(saved.score);
+      };
+      transitionTo('READY');
+      return;
+    }
+
+    // Camera mode: ensure mouse simulation is off
+    handTracker.enableMouseTestMode(false);
     transitionTo('REQUESTING_CAMERA');
 
     try {
-      // Request camera + init hand tracking
-      await handTracker.initialize();
+      // 1. Request webcam video stream
+      await handTracker.startCamera();
+
+      // 2. Initialize MediaPipe HandLandmarker
       transitionTo('INITIALIZING_TRACKING');
-      await handTracker.waitUntilReady();
+      await handTracker.initMediaPipe();
 
       // Wire game-over callback
       engine.onGameOver = async (stats: GameOverStats) => {
@@ -241,7 +259,6 @@ export default function HandCatchPage() {
         const saved = await postScore(stats);
         if (saved) {
           setHighlightScore(saved.score);
-          // Check if new record (first position in local cache)
           try {
             const cached = localStorage.getItem(`handCatch.leaderboard.${stats.mode}`);
             if (cached) {
@@ -258,19 +275,29 @@ export default function HandCatchPage() {
         }
       };
 
-      // Transition to READY state to display detected hands & optional calibration
+      // 3. Transition to alignment & calibration
       transitionTo('READY');
     } catch (err: unknown) {
-      const msg =
-        err instanceof DOMException && err.name === 'NotAllowedError'
-          ? 'Camera access was denied. Please allow camera in your browser settings and try again.'
-          : err instanceof Error
-          ? err.message
-          : 'Unknown camera / tracking error.';
+      let msg = 'Could not access your camera.';
+      if (err instanceof DOMException || (err instanceof Error && err.name)) {
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          msg = 'Camera permission was denied. Please click the lock 🔒 or camera icon in your browser address bar to allow camera access and reload.';
+        } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+          msg = 'No camera device was detected on your computer. Please plug in a webcam or play using Mouse Mode.';
+        } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+          msg = 'Camera is currently locked by another application (Zoom, Teams, Discord, or Windows Camera). Please close other apps and try again.';
+        } else if (err.name === 'OverconstrainedError') {
+          msg = 'Webcam resolution constraint not supported. Falling back to default settings.';
+        } else if (err instanceof Error) {
+          msg = err.message;
+        }
+      } else if (err instanceof Error) {
+        msg = err.message;
+      }
       setCameraErrorMsg(msg);
       transitionTo('CAMERA_ERROR');
     }
-  }, [mode, playerName, isMuted, transitionTo]);
+  }, [mode, playerName, isMuted, inputMode, transitionTo]);
 
   // ── Launch Countdown from READY state ─────────────────────────────────────────
   const handleLaunchCountdown = useCallback(() => {
@@ -321,6 +348,14 @@ export default function HandCatchPage() {
     const engine = engineRef.current;
     if (!engine) return;
     setCameraErrorMsg('');
+    setInputMode('MOUSE');
+
+    // Unlock audio context on user gesture
+    await audio.init();
+    if (isMuted) audio.setMuted(true);
+
+    gameStateManager.setMode(mode);
+    gameStateManager.setPlayerName(playerName);
 
     // Enable mouse test mode on the singleton
     handTracker.enableMouseTestMode(true);
@@ -334,7 +369,7 @@ export default function HandCatchPage() {
     };
 
     transitionTo('READY');
-  }, [transitionTo]);
+  }, [mode, playerName, isMuted, transitionTo]);
 
   // ── Settings handlers ─────────────────────────────────────────────────────────
   const handleToggleMute = useCallback(() => {
@@ -399,6 +434,8 @@ export default function HandCatchPage() {
           onModeChange={setMode}
           playerName={playerName}
           onPlayerNameChange={setPlayerName}
+          inputMode={inputMode}
+          onInputModeChange={setInputMode}
           onStartGame={handleStartGame}
           isMuted={isMuted}
           onToggleMute={handleToggleMute}
@@ -415,6 +452,7 @@ export default function HandCatchPage() {
           handsCount={handsCount}
           onReady={handleLaunchCountdown}
           onCancel={handleRestart}
+          onPlayWithMouse={handlePlayWithMouse}
         />
       )}
 

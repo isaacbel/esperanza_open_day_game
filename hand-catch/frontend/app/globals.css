@@ -648,6 +648,7 @@ body {
 .status-dot.green  { background: var(--emerald); box-shadow: 0 0 8px var(--emerald); }
 .status-dot.amber  { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
 .status-dot.red    { background: var(--crimson); box-shadow: 0 0 8px var(--crimson); }
+.status-dot.cyan   { background: var(--neon-cyan); box-shadow: 0 0 8px var(--neon-cyan); }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }

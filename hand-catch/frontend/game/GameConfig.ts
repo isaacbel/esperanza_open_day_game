@@ -372,7 +372,7 @@ export const GAME_CONFIG: IGameConfig = {
   screenShakeMaxOffset: 14,
   dwellMs: 1200,
 
-  // MediaPipe Assets
-  mediaPipeVisionWasmUrl: "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm",
-  mediaPipeModelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
+  // MediaPipe Assets (Local offline bundle with CDN fallback)
+  mediaPipeVisionWasmUrl: "/wasm",
+  mediaPipeModelAssetPath: "/models/hand_landmarker.task"
 };

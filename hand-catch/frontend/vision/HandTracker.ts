@@ -260,6 +260,17 @@ export class HandTracker {
   }
 
   private lastTimestampMs: number = 0;
+  public selectedDeviceId: string | null = null;
+
+  public async getAvailableVideoDevices(): Promise<MediaDeviceInfo[]> {
+    if (typeof window === 'undefined' || !navigator?.mediaDevices?.enumerateDevices) return [];
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      return devices.filter(d => d.kind === 'videoinput');
+    } catch {
+      return [];
+    }
+  }
 
   public async startCamera(): Promise<boolean> {
     this.setStatus('REQUESTING_CAMERA');
@@ -271,11 +282,16 @@ export class HandTracker {
       throw err;
     }
 
-    const constraintTiers: MediaStreamConstraints[] = [
-      { video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false },
-      { video: { facingMode: 'user' }, audio: false },
-      { video: true, audio: false }
-    ];
+    const constraintTiers: MediaStreamConstraints[] = this.selectedDeviceId
+      ? [
+          { video: { deviceId: { exact: this.selectedDeviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false },
+          { video: { deviceId: { exact: this.selectedDeviceId } }, audio: false }
+        ]
+      : [
+          { video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false },
+          { video: { facingMode: 'user' }, audio: false },
+          { video: true, audio: false }
+        ];
 
     let stream: MediaStream | null = null;
     let lastErr: unknown = null;
@@ -284,8 +300,12 @@ export class HandTracker {
       try {
         stream = await navigator.mediaDevices.getUserMedia(constraints);
         if (stream) break;
-      } catch (e) {
+      } catch (e: unknown) {
         lastErr = e;
+        // If user explicitly denied permission, break immediately instead of triggering repeated popups
+        if (e instanceof DOMException && (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError')) {
+          break;
+        }
         console.warn('getUserMedia tier failed, trying next tier...', constraints, e);
       }
     }
@@ -300,6 +320,8 @@ export class HandTracker {
     this.stream = stream;
 
     // Create or reuse hidden offscreen video element
+    // NOTE: Keep width/height realistic (640x480) and position offscreen (-9999px)
+    // Avoid 1px x 1px and opacity 0.001 which causes Chromium video frame throttling/pausing!
     if (!this.video) {
       this.video = document.createElement('video');
     }
@@ -309,11 +331,10 @@ export class HandTracker {
     this.video.autoplay = true;
     this.video.playsInline = true;
     this.video.style.position = 'fixed';
-    this.video.style.top = '0';
-    this.video.style.left = '0';
-    this.video.style.width = '1px';
-    this.video.style.height = '1px';
-    this.video.style.opacity = '0.001';
+    this.video.style.top = '-9999px';
+    this.video.style.left = '-9999px';
+    this.video.style.width = '640px';
+    this.video.style.height = '480px';
     this.video.style.pointerEvents = 'none';
     this.video.style.zIndex = '-99999';
 
@@ -335,19 +356,27 @@ export class HandTracker {
       if (!this.video) return reject(new Error('Video element destroyed'));
 
       let resolved = false;
+      let safetyTimer: ReturnType<typeof setTimeout> | null = null;
+
       const finish = () => {
         if (resolved) return;
         resolved = true;
+        if (safetyTimer) clearTimeout(safetyTimer);
         resolve();
       };
 
+      // 5-second safety timer so video element preparation never hangs indefinitely
+      safetyTimer = setTimeout(() => {
+        console.warn('[HandTracker] Video play safety timeout reached (5000ms), proceeding with stream.');
+        finish();
+      }, 5000);
+
       const tryPlay = () => {
-        if (!this.video) return;
+        if (!this.video || resolved) return;
         const playPromise = this.video.play();
         if (playPromise !== undefined) {
           playPromise.then(finish).catch((err) => {
-            console.warn('Video play warning:', err);
-            // Some browsers require loadeddata before play completes
+            console.warn('[HandTracker] Video play warning:', err);
             finish();
           });
         } else {
@@ -361,9 +390,11 @@ export class HandTracker {
         this.video.onloadedmetadata = () => tryPlay();
         this.video.oncanplay = () => tryPlay();
         this.video.onloadeddata = () => finish();
-        this.video.onerror = (e) => reject(new Error(`Webcam video load error: ${e}`));
-        // Fallback timeout in case events were already dispatched
-        setTimeout(tryPlay, 400);
+        this.video.onerror = (e) => {
+          if (safetyTimer) clearTimeout(safetyTimer);
+          reject(new Error(`Webcam video load error: ${e}`));
+        };
+        setTimeout(tryPlay, 350);
       }
     });
 
@@ -381,7 +412,7 @@ export class HandTracker {
 
   public async initMediaPipe(): Promise<boolean> {
     this.setStatus('INIT_TRACKING');
-    // Wrap entire MediaPipe init in a 15-second timeout to prevent silent hang
+    // Wrap async operations in timeouts to prevent silent hangs
     const withTimeout = <T>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
       return new Promise<T>((resolve, reject) => {
         const timer = setTimeout(() => reject(new Error(`Timeout (${ms}ms) waiting for: ${label}`)), ms);
@@ -391,12 +422,42 @@ export class HandTracker {
 
     try {
       console.log('[HandTracker] Loading MediaPipe vision module...');
-      const vision = await withTimeout(import('@mediapipe/tasks-vision'), 12000, 'mediapipe module import');
-      console.log('[HandTracker] Resolving FilesetResolver from:', GAME_CONFIG.mediaPipeVisionWasmUrl);
-      const fileset = await withTimeout(
-        vision.FilesetResolver.forVisionTasks(GAME_CONFIG.mediaPipeVisionWasmUrl),
-        12000, 'FilesetResolver'
-      );
+      const vision = await withTimeout(import('@mediapipe/tasks-vision'), 10000, 'mediapipe module import');
+
+      // Multi-tier WASM resolution: Local /wasm first, then CDN fallbacks
+      const wasmLocations = [
+        typeof window !== 'undefined' ? `${window.location.origin}/wasm` : '/wasm',
+        GAME_CONFIG.mediaPipeVisionWasmUrl,
+        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm',
+        'https://unpkg.com/@mediapipe/tasks-vision@0.10.14/wasm'
+      ];
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let fileset: any = null;
+      let filesetErr: unknown = null;
+
+      for (const loc of wasmLocations) {
+        try {
+          console.log('[HandTracker] Attempting FilesetResolver from:', loc);
+          fileset = await withTimeout(
+            vision.FilesetResolver.forVisionTasks(loc),
+            6000,
+            `FilesetResolver (${loc})`
+          );
+          if (fileset) {
+            console.log('[HandTracker] FilesetResolver resolved successfully from:', loc);
+            break;
+          }
+        } catch (e) {
+          filesetErr = e;
+          console.warn(`[HandTracker] FilesetResolver failed at ${loc}, trying next tier...`, e);
+        }
+      }
+
+      if (!fileset) {
+        throw filesetErr || new Error('Failed to resolve MediaPipe FilesetResolver from all candidate sources.');
+      }
+
       const common = {
         runningMode: 'VIDEO' as const,
         numHands: 2,
@@ -405,30 +466,59 @@ export class HandTracker {
         minTrackingConfidence: 0.5,
       };
 
-      try {
-        console.log('[HandTracker] Creating HandLandmarker (GPU)...');
-        this.handLandmarker = await withTimeout(
-          vision.HandLandmarker.createFromOptions(fileset, {
-            baseOptions: { modelAssetPath: GAME_CONFIG.mediaPipeModelAssetPath, delegate: 'GPU' as const },
-            ...common,
-          }),
-          15000, 'HandLandmarker GPU'
-        );
-        this.activeDelegate = 'GPU';
-        console.log('[HandTracker] HandLandmarker created on GPU ✓');
-      } catch (gpuErr) {
-        console.warn('[HandTracker] GPU delegate failed, falling back to CPU:', gpuErr);
-        this.handLandmarker = await withTimeout(
-          vision.HandLandmarker.createFromOptions(fileset, {
-            baseOptions: { modelAssetPath: GAME_CONFIG.mediaPipeModelAssetPath, delegate: 'CPU' as const },
-            ...common,
-          }),
-          15000, 'HandLandmarker CPU'
-        );
-        this.activeDelegate = 'CPU';
-        console.log('[HandTracker] HandLandmarker created on CPU ✓');
+      // Multi-tier model resolution: Local /models first, then Google Cloud Storage CDN
+      const modelLocations = [
+        typeof window !== 'undefined' ? `${window.location.origin}/models/hand_landmarker.task` : '/models/hand_landmarker.task',
+        GAME_CONFIG.mediaPipeModelAssetPath,
+        'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task'
+      ];
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let landmarkerInstance: any = null;
+      let lastModelErr: unknown = null;
+
+      for (const modelPath of modelLocations) {
+        // First try GPU
+        try {
+          console.log('[HandTracker] Creating HandLandmarker (GPU) from:', modelPath);
+          landmarkerInstance = await withTimeout(
+            vision.HandLandmarker.createFromOptions(fileset, {
+              baseOptions: { modelAssetPath: modelPath, delegate: 'GPU' as const },
+              ...common,
+            }),
+            8000,
+            `HandLandmarker GPU (${modelPath})`
+          );
+          this.activeDelegate = 'GPU';
+          console.log('[HandTracker] HandLandmarker created on GPU ✓');
+          break;
+        } catch (gpuErr) {
+          console.warn(`[HandTracker] GPU delegate failed for ${modelPath}, trying CPU...`, gpuErr);
+          // Fallback to CPU for this model
+          try {
+            landmarkerInstance = await withTimeout(
+              vision.HandLandmarker.createFromOptions(fileset, {
+                baseOptions: { modelAssetPath: modelPath, delegate: 'CPU' as const },
+                ...common,
+              }),
+              8000,
+              `HandLandmarker CPU (${modelPath})`
+            );
+            this.activeDelegate = 'CPU';
+            console.log('[HandTracker] HandLandmarker created on CPU ✓');
+            break;
+          } catch (cpuErr) {
+            lastModelErr = cpuErr;
+            console.warn(`[HandTracker] CPU delegate also failed for ${modelPath}:`, cpuErr);
+          }
+        }
       }
 
+      if (!landmarkerInstance) {
+        throw lastModelErr || new Error('Failed to create HandLandmarker from all candidate model paths.');
+      }
+
+      this.handLandmarker = landmarkerInstance;
       this.startInferenceLoop();
       this.setStatus('ACTIVE');
       return true;
@@ -446,6 +536,10 @@ export class HandTracker {
 
     const processFrame = () => {
       if (!this.isLoopRunning) return;
+
+      if (this.video && this.video.paused) {
+        this.video.play().catch(() => {});
+      }
 
       if (
         this.video &&
