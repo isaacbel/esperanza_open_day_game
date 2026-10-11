@@ -29,6 +29,7 @@ export default [
       ...nextPlugin.configs["core-web-vitals"].rules,
       ...reactHooksPlugin.configs.recommended.rules,
       "@next/next/no-page-custom-font": "off",
+      "react-hooks/set-state-in-effect": "off",
     },
   },
   {

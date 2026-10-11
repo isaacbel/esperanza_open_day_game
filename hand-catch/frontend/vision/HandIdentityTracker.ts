@@ -28,7 +28,7 @@ export interface TrackAssignment {
 }
 
 export class HandIdentityTracker {
-  private static readonly MAX_MATCH_DIST = 260; // pixels in game space
+  private static readonly MAX_MATCH_DIST = 350; // pixels in game space — allows fast sweeps
 
   /**
    * Computes the matching cost between an existing track and a new detection candidate.
@@ -78,6 +78,8 @@ export class HandIdentityTracker {
   /**
    * Solves bipartite matching between existing active tracks and candidate detections.
    * Guarantees optimal assignment without swapping crossed tracks.
+   *
+   * @param existingTracks - includes lastSeenMs so actual elapsed time is used per-track
    */
   public static matchDetections(
     existingTracks: {
@@ -86,9 +88,11 @@ export class HandIdentityTracker {
       vx: number;
       vy: number;
       handedness: string;
+      lastSeenMs?: number; // performance.now() timestamp of last detection
     }[],
     candidates: DetectionCandidate[],
-    dtSec: number
+    _dtSecIgnored: number, // kept for API compatibility – actual dt computed per-track
+    nowMs: number = performance.now()
   ): {
     matched: Map<number, number>; // trackId -> candidateIndex
     unmatchedTracks: number[];    // trackIds with no match
@@ -108,6 +112,10 @@ export class HandIdentityTracker {
     const costList: CostPair[] = [];
 
     for (const track of existingTracks) {
+      // Use actual elapsed time since this track was last seen
+      const dtSec = track.lastSeenMs != null
+        ? Math.max(0.016, (nowMs - track.lastSeenMs) / 1000)
+        : 0.016;
       for (let c = 0; c < candidates.length; c++) {
         const cost = this.calculateCost(
           track.palm,
@@ -125,7 +133,7 @@ export class HandIdentityTracker {
     costList.sort((a, b) => a.cost - b.cost);
 
     for (const pair of costList) {
-      if (pair.cost > 0.85) continue; // Exceeds plausibility threshold
+      if (pair.cost > 0.88) continue; // Exceeds plausibility threshold
       if (!matchedTracks.has(pair.trackId) && !matchedCandidates.has(pair.candIdx)) {
         matched.set(pair.trackId, pair.candIdx);
         matchedTracks.add(pair.trackId);

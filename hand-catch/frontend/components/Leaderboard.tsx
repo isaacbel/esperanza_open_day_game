@@ -89,36 +89,45 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ mode, highlightScore }
   const [isOffline, setIsOffline] = useState<boolean>(false);
   const [confirmingClear, setConfirmingClear] = useState<boolean>(false);
 
-  const fetchScores = async () => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-    try {
-      const res = await fetch(`${apiUrl}/api/leaderboard?mode=${mode}&limit=5`, {
-        signal: AbortSignal.timeout(3000)
-      });
-      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
-      const data = await res.json();
-      setScores(data);
-      setIsOffline(false);
-      // Cache locally for offline resilience
-      try {
-        localStorage.setItem(`handCatch.leaderboard.${mode}`, JSON.stringify(data));
-      } catch (_) {}
-    } catch (_) {
-      // Offline fallback: try localStorage, or default benchmarks
-      setIsOffline(true);
-      try {
-        const cached = localStorage.getItem(`handCatch.leaderboard.${mode}`);
-        if (cached) {
-          setScores(JSON.parse(cached));
-          return;
-        }
-      } catch (_) {}
-      setScores(DEFAULT_BENCHMARKS[mode]);
-    }
-  };
-
   useEffect(() => {
+    let active = true;
+
+    const fetchScores = async () => {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      try {
+        const res = await fetch(`${apiUrl}/api/leaderboard?mode=${mode}&limit=5`, {
+          signal: AbortSignal.timeout(3000)
+        });
+        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+        const data = await res.json();
+        if (active) {
+          setScores(data);
+          setIsOffline(false);
+        }
+        // Cache locally for offline resilience
+        try {
+          localStorage.setItem(`handCatch.leaderboard.${mode}`, JSON.stringify(data));
+        } catch (_) {}
+      } catch (_) {
+        if (!active) return;
+        // Offline fallback: try localStorage, or default benchmarks
+        setIsOffline(true);
+        try {
+          const cached = localStorage.getItem(`handCatch.leaderboard.${mode}`);
+          if (cached) {
+            setScores(JSON.parse(cached));
+            return;
+          }
+        } catch (_) {}
+        setScores(DEFAULT_BENCHMARKS[mode]);
+      }
+    };
+
     fetchScores();
+
+    return () => {
+      active = false;
+    };
   }, [mode]);
 
   const handleClear = async () => {

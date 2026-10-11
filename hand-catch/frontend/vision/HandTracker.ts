@@ -461,9 +461,9 @@ export class HandTracker {
       const common = {
         runningMode: 'VIDEO' as const,
         numHands: 2,
-        minHandDetectionConfidence: 0.5,
-        minHandPresenceConfidence: 0.5,
-        minTrackingConfidence: 0.5,
+        minHandDetectionConfidence: 0.55,
+        minHandPresenceConfidence: 0.55,
+        minTrackingConfidence: 0.60,
       };
 
       // Multi-tier model resolution: Local /models first, then Google Cloud Storage CDN
@@ -613,9 +613,10 @@ export class HandTracker {
     }
 
     const existingList = Array.from(this.trackedHands.values()).map(h => ({
-      id: h.trackId, palm: { x: h.palm.x, y: h.palm.y }, vx: h.vx, vy: h.vy, handedness: h.handedness
+      id: h.trackId, palm: { x: h.palm.x, y: h.palm.y }, vx: h.vx, vy: h.vy, handedness: h.handedness,
+      lastSeenMs: h.lastSeenTime
     }));
-    const matchResult = HandIdentityTracker.matchDetections(existingList, candidates, 0.016);
+    const matchResult = HandIdentityTracker.matchDetections(existingList, candidates, 0.016, now);
 
     for (const [trackId, candIdx] of matchResult.matched.entries()) {
       const hand = this.trackedHands.get(trackId);
@@ -623,7 +624,14 @@ export class HandTracker {
     }
     for (const candIdx of matchResult.unmatchedCandidates) {
       const newId   = this.nextTrackId++;
-      const newHand = new TrackedHandState(newId, this.trackedHands.size % 2);
+      // Stable slot assignment: prefer slot 0 (cyan) or slot 1 (magenta)
+      // by using the candidate's reported handedness (Left=0, Right=1) when available
+      // to prevent color-swap when a hand briefly leaves and returns.
+      const cand = candidates[candIdx];
+      let slot = this.trackedHands.size % 2;
+      if (cand.handedness === 'Right') slot = 0;
+      else if (cand.handedness === 'Left') slot = 1;
+      const newHand = new TrackedHandState(newId, slot);
       this.trackedHands.set(newId, newHand);
       this.updateTrack(newHand, candidates[candIdx], tipIndices, now);
     }
@@ -646,8 +654,21 @@ export class HandTracker {
     now: number
   ): void {
     const dt = Math.max(0.001, (now - hand.lastSeenTime) / 1000);
+    const wasGhost = hand.isGhost;
     hand.lastSeenTime = now; hand.active = true; hand.isGhost = false; hand.opacity = 1.0;
     hand.handedness = cand.handedness; hand.confidence = cand.confidence;
+
+    // If this track was in ghost state, reset all filters to avoid a snap
+    // from the ghost-predicted position to the real detected position.
+    if (wasGhost) {
+      hand.filterPalmX.reset();
+      hand.filterPalmY.reset();
+      hand.filterScale.reset();
+      hand.filterTipX.forEach(f => f.reset());
+      hand.filterTipY.forEach(f => f.reset());
+      hand.filterLmX.forEach(f => f.reset());
+      hand.filterLmY.forEach(f => f.reset());
+    }
 
     // 1. Scale & Position
     hand.scale = hand.filterScale.filter(cand.scale, now);

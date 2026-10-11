@@ -24,7 +24,8 @@ export class VelocityPredictor {
   private dirY: number = 0;
 
   // Smoothing factor for velocity calculation to prevent derivative noise
-  private velocitySmoothing: number = 0.35;
+  // 0.22: less lag on fast swipes vs previous 0.35, while still dampening single-frame spikes
+  private velocitySmoothing: number = 0.22;
 
   // Prediction configuration (milliseconds)
   public minPredictionMs: number = 30;
@@ -59,7 +60,7 @@ export class VelocityPredictor {
     const predictionSec = predictionMs / 1000;
 
     // Settle dampener: if speed is below threshold, quickly decay prediction towards current pos
-    const settle = this.speed < 20 ? 0 : 1.0;
+    const settle = this.speed < 10 ? 0 : 1.0;
 
     const predicted: Point2D = {
       x: current.x + this.vx * predictionSec * settle,

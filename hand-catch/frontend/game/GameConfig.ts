@@ -325,11 +325,11 @@ export const GAME_CONFIG: IGameConfig = {
   // Hand Tracking, Smoothing & Prediction Tuning
   handSmoothingMode: 'oneEuro',
   handSmoothing: 0.55,
-  oneEuroMinCutoff: 1.0,
-  oneEuroBeta: 0.035,
+  oneEuroMinCutoff: 1.2,
+  oneEuroBeta: 0.07,
   oneEuroDCutoff: 1.0,
-  predictionMinMs: 30,
-  predictionMaxMs: 75,
+  predictionMinMs: 25,
+  predictionMaxMs: 70,
 
   handHoldMs: 250,
   handFadeMs: 350,
