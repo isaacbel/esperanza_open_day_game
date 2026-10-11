@@ -11,10 +11,13 @@
 export interface PlayerSpatialStats {
   leftAttempts: number;
   leftCatches: number;
+  leftMisses: number;
   rightAttempts: number;
   rightCatches: number;
+  rightMisses: number;
   centerAttempts: number;
   centerCatches: number;
+  centerMisses: number;
   leftReactionAvg: number;
   rightReactionAvg: number;
   centerReactionAvg: number;
@@ -28,14 +31,26 @@ export interface PlayerGestureStats {
   deflections: number;
 }
 
+export interface PlayerSpatialBreakdown {
+  leftAccuracy: number;
+  rightAccuracy: number;
+  centerAccuracy: number;
+  dominantSide: 'left' | 'right' | 'balanced';
+  weakSide: 'left' | 'right' | 'balanced';
+  insights: string[];
+}
+
 export class PlayerModel {
   public spatial: PlayerSpatialStats = {
     leftAttempts: 0,
     leftCatches: 0,
+    leftMisses: 0,
     rightAttempts: 0,
     rightCatches: 0,
+    rightMisses: 0,
     centerAttempts: 0,
     centerCatches: 0,
+    centerMisses: 0,
     leftReactionAvg: 0.45,
     rightReactionAvg: 0.45,
     centerReactionAvg: 0.40
@@ -56,10 +71,13 @@ export class PlayerModel {
     this.spatial = {
       leftAttempts: 0,
       leftCatches: 0,
+      leftMisses: 0,
       rightAttempts: 0,
       rightCatches: 0,
+      rightMisses: 0,
       centerAttempts: 0,
       centerCatches: 0,
+      centerMisses: 0,
       leftReactionAvg: 0.45,
       rightReactionAvg: 0.45,
       centerReactionAvg: 0.40
@@ -82,6 +100,17 @@ export class PlayerModel {
       this.spatial.rightAttempts++;
     } else {
       this.spatial.centerAttempts++;
+    }
+  }
+
+  public recordMiss(x: number): void {
+    this.recordAttempt(x);
+    if (x < 480) {
+      this.spatial.leftMisses++;
+    } else if (x > 800) {
+      this.spatial.rightMisses++;
+    } else {
+      this.spatial.centerMisses++;
     }
   }
 
@@ -122,13 +151,15 @@ export class PlayerModel {
    * Identifies the player's weaker side for intelligent procedural challenge placement
    */
   public getChallengingSide(): 'left' | 'right' | 'center' | 'balanced' {
-    const leftAcc = this.spatial.leftAttempts > 2 ? this.spatial.leftCatches / this.spatial.leftAttempts : 0.8;
-    const rightAcc = this.spatial.rightAttempts > 2 ? this.spatial.rightCatches / this.spatial.rightAttempts : 0.8;
+    const leftTotal = this.spatial.leftAttempts;
+    const rightTotal = this.spatial.rightAttempts;
+    const leftAcc = leftTotal > 2 ? this.spatial.leftCatches / leftTotal : 0.8;
+    const rightAcc = rightTotal > 2 ? this.spatial.rightCatches / rightTotal : 0.8;
 
-    if (leftAcc < rightAcc - 0.15 || this.spatial.leftReactionAvg > this.spatial.rightReactionAvg + 0.08) {
+    if ((leftTotal >= 3 && leftAcc < rightAcc - 0.12) || (this.spatial.leftMisses > this.spatial.rightMisses + 2)) {
       return 'left';
     }
-    if (rightAcc < leftAcc - 0.15 || this.spatial.rightReactionAvg > this.spatial.leftReactionAvg + 0.08) {
+    if ((rightTotal >= 3 && rightAcc < leftAcc - 0.12) || (this.spatial.rightMisses > this.spatial.leftMisses + 2)) {
       return 'right';
     }
     return 'balanced';
@@ -143,5 +174,48 @@ export class PlayerModel {
     const balanceScore = 50;
 
     return Math.min(99, Math.round(balanceScore + varietyScore * 0.5 + speedScore * 0.5));
+  }
+
+  /**
+   * Computes human-readable AI coaching insights for the game over screen
+   */
+  public getSpatialBreakdown(): PlayerSpatialBreakdown {
+    const lAtt = Math.max(1, this.spatial.leftAttempts);
+    const rAtt = Math.max(1, this.spatial.rightAttempts);
+    const cAtt = Math.max(1, this.spatial.centerAttempts);
+
+    const leftAcc = Math.round((this.spatial.leftCatches / lAtt) * 100);
+    const rightAcc = Math.round((this.spatial.rightCatches / rAtt) * 100);
+    const centerAcc = Math.round((this.spatial.centerCatches / cAtt) * 100);
+
+    const insights: string[] = [];
+
+    if (this.spatial.leftMisses > this.spatial.rightMisses + 2) {
+      insights.push(`⚠️ Left Flank Vulnerability: You missed ${this.spatial.leftMisses} targets on the left side (${leftAcc}% catch rate).`);
+    } else if (this.spatial.rightMisses > this.spatial.leftMisses + 2) {
+      insights.push(`⚠️ Right Flank Vulnerability: You missed ${this.spatial.rightMisses} targets on the right side (${rightAcc}% catch rate).`);
+    } else if (this.spatial.leftCatches > 0 && this.spatial.rightCatches > 0) {
+      insights.push(`✨ Balanced Spatial Coverage: Excellent left-right symmetry across all arena lanes.`);
+    }
+
+    if (this.spatial.centerReactionAvg < 0.28) {
+      insights.push(`⚡ Rapid Center Intercept: Blazing ${(this.spatial.centerReactionAvg * 1000).toFixed(0)}ms reaction time on center lanes.`);
+    }
+
+    if (this.gestures.deflections > 0) {
+      insights.push(`🛡️ Tactical Deflection: Safely deflected ${this.gestures.deflections} hazard bombs with swipe gestures.`);
+    }
+
+    const weakSide = this.getChallengingSide() === 'left' ? 'left' : this.getChallengingSide() === 'right' ? 'right' : 'balanced';
+    const dominantSide = leftAcc > rightAcc + 10 ? 'left' : rightAcc > leftAcc + 10 ? 'right' : 'balanced';
+
+    return {
+      leftAccuracy: leftAcc,
+      rightAccuracy: rightAcc,
+      centerAccuracy: centerAcc,
+      dominantSide,
+      weakSide,
+      insights
+    };
   }
 }

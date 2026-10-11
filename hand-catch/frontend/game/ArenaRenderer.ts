@@ -1,6 +1,7 @@
 /**
  * ArenaRenderer.ts - Futuristic Circular Perspective Arena, Moving Grid & Cyber Visuals
  * Pre-renders static geometry and radial grids to offscreen canvases for maximum frame rate.
+ * Supports serene Zen mode aesthetic and dramatic cinematic Boss Pre-Warning overlay.
  */
 import { GAME_CONFIG } from './GameConfig';
 
@@ -21,6 +22,7 @@ export class ArenaRenderer {
   public scannerAngle: number = 0;
   public floorFlashAlpha: number = 0;
   public vignetteRedFlash: number = 0;
+  public isZenMode: boolean = false;
   private ambientParticles: AmbientParticle[] = [];
   private gridOffset: number = 0;
 
@@ -33,13 +35,12 @@ export class ArenaRenderer {
     const w = GAME_CONFIG.logicalWidth;
     const h = GAME_CONFIG.logicalHeight;
 
-    // 1. Pre-rendered Cyber Vignette & Depth Tint (Section 29)
+    // 1. Pre-rendered Cyber Vignette & Depth Tint
     const vigCanvas = document.createElement('canvas');
     vigCanvas.width = w;
     vigCanvas.height = h;
     const vCtx = vigCanvas.getContext('2d');
     if (vCtx) {
-      // Subtle cyber blue-indigo tint to integrate webcam
       vCtx.fillStyle = 'rgba(2, 6, 18, 0.40)';
       vCtx.fillRect(0, 0, w, h);
 
@@ -145,6 +146,21 @@ export class ArenaRenderer {
     if (this.offscreenVignette) {
       ctx.drawImage(this.offscreenVignette, 0, 0);
     }
+
+    // Serene Zen mode soft emerald aura overlay
+    if (this.isZenMode) {
+      ctx.save();
+      const w = GAME_CONFIG.logicalWidth;
+      const h = GAME_CONFIG.logicalHeight;
+      const zenGrad = ctx.createRadialGradient(w / 2, h / 2, h * 0.3, w / 2, h / 2, w * 0.7);
+      zenGrad.addColorStop(0, 'rgba(0, 255, 153, 0.03)');
+      zenGrad.addColorStop(1, 'rgba(2, 28, 20, 0.45)');
+      ctx.fillStyle = zenGrad;
+      ctx.fillRect(0, 0, w, h);
+      ctx.restore();
+      return;
+    }
+
     if (this.vignetteRedFlash > 0.01) {
       ctx.save();
       ctx.globalAlpha = this.vignetteRedFlash * 0.7;
@@ -159,10 +175,11 @@ export class ArenaRenderer {
     const cy = GAME_CONFIG.arena.centerY;
     const rx = GAME_CONFIG.arena.radiusX;
     const ry = GAME_CONFIG.arena.radiusY;
+    const themeColor = this.isZenMode ? 'rgba(0, 255, 153, 0.12)' : 'rgba(0, 240, 255, 0.09)';
 
-    // 1. Moving 3D Perspective Grid Lines (Section 28)
+    // 1. Moving 3D Perspective Grid Lines
     ctx.save();
-    ctx.strokeStyle = 'rgba(0, 240, 255, 0.09)';
+    ctx.strokeStyle = themeColor;
     ctx.lineWidth = 1;
     for (let x = 180; x <= 1100; x += 90) {
       ctx.beginPath();
@@ -184,9 +201,15 @@ export class ArenaRenderer {
     ctx.clip();
 
     const grad = ctx.createConicGradient(this.scannerAngle, cx, cy);
-    grad.addColorStop(0, 'rgba(0, 240, 255, 0.22)');
-    grad.addColorStop(0.55 / (Math.PI * 2), 'rgba(0, 240, 255, 0.0)');
-    grad.addColorStop(1, 'rgba(0, 240, 255, 0.0)');
+    if (this.isZenMode) {
+      grad.addColorStop(0, 'rgba(0, 255, 153, 0.22)');
+      grad.addColorStop(0.55 / (Math.PI * 2), 'rgba(0, 255, 153, 0.0)');
+      grad.addColorStop(1, 'rgba(0, 255, 153, 0.0)');
+    } else {
+      grad.addColorStop(0, 'rgba(0, 240, 255, 0.22)');
+      grad.addColorStop(0.55 / (Math.PI * 2), 'rgba(0, 240, 255, 0.0)');
+      grad.addColorStop(1, 'rgba(0, 240, 255, 0.0)');
+    }
 
     ctx.fillStyle = grad;
     ctx.fillRect(cx - rx, cy - ry, rx * 2, ry * 2);
@@ -196,7 +219,7 @@ export class ArenaRenderer {
     ctx.save();
     for (const d of this.ambientParticles) {
       const a = d.alpha * (0.6 + 0.4 * Math.sin(d.pulsePhase));
-      ctx.fillStyle = `rgba(0, 240, 255, ${a.toFixed(3)})`;
+      ctx.fillStyle = this.isZenMode ? `rgba(0, 255, 153, ${a.toFixed(3)})` : `rgba(0, 240, 255, ${a.toFixed(3)})`;
       ctx.beginPath();
       ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);
       ctx.fill();
@@ -212,15 +235,95 @@ export class ArenaRenderer {
     ctx.lineTo(cx + halfW, floorY);
 
     if (this.floorFlashAlpha > 0.02) {
-      ctx.strokeStyle = `rgba(255, 42, 95, ${this.floorFlashAlpha})`;
-      ctx.lineWidth = 4.5;
-      ctx.shadowColor = '#ff2a5f';
-      ctx.shadowBlur = 14;
+      if (this.isZenMode) {
+        ctx.strokeStyle = `rgba(0, 255, 153, ${this.floorFlashAlpha * 0.7})`;
+        ctx.lineWidth = 3.5;
+        ctx.shadowColor = '#00ff99';
+        ctx.shadowBlur = 10;
+      } else {
+        ctx.strokeStyle = `rgba(255, 42, 95, ${this.floorFlashAlpha})`;
+        ctx.lineWidth = 4.5;
+        ctx.shadowColor = '#ff2a5f';
+        ctx.shadowBlur = 14;
+      }
     } else {
-      ctx.strokeStyle = 'rgba(0, 240, 255, 0.35)';
+      ctx.strokeStyle = this.isZenMode ? 'rgba(0, 255, 153, 0.35)' : 'rgba(0, 240, 255, 0.35)';
       ctx.lineWidth = 2;
     }
     ctx.stroke();
+    ctx.restore();
+  }
+
+  /**
+   * Dramatic 2-Second Boss & Challenge Pre-Warning Overlay (W-005)
+   */
+  public renderBossWarningOverlay(
+    ctx: CanvasRenderingContext2D,
+    title: string,
+    subtitle: string,
+    color: string = '#ff0055',
+    remainingMs: number = 2000
+  ): void {
+    const w = GAME_CONFIG.logicalWidth;
+    const pulse = 1.0 + Math.sin(performance.now() * 0.018) * 0.08;
+    const bannerY = 240;
+    const bannerHeight = 90;
+
+    ctx.save();
+    // Backdrop bar
+    ctx.fillStyle = 'rgba(5, 5, 16, 0.88)';
+    ctx.fillRect(0, bannerY - bannerHeight / 2, w, bannerHeight);
+
+    // Hazard top & bottom glowing accent lines
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 14;
+
+    ctx.beginPath();
+    ctx.moveTo(0, bannerY - bannerHeight / 2);
+    ctx.lineTo(w, bannerY - bannerHeight / 2);
+    ctx.moveTo(0, bannerY + bannerHeight / 2);
+    ctx.lineTo(w, bannerY + bannerHeight / 2);
+    ctx.stroke();
+
+    // Animated diagonal warning chevrons
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, bannerY - bannerHeight / 2, w, bannerHeight);
+    ctx.clip();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.lineWidth = 8;
+    const offset = (performance.now() * 0.08) % 40;
+    for (let x = -40 + offset; x < w + 40; x += 40) {
+      ctx.beginPath();
+      ctx.moveTo(x, bannerY - bannerHeight / 2);
+      ctx.lineTo(x + 30, bannerY + bannerHeight / 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Pulsing Text & Subtitle
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    ctx.save();
+    ctx.translate(w / 2, bannerY - 12);
+    ctx.scale(pulse, pulse);
+    ctx.font = '900 24px "Orbitron", system-ui';
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 16;
+    ctx.fillText(`⚠️ ${title.toUpperCase()} ⚠️`, 0, 0);
+    ctx.restore();
+
+    ctx.font = '700 13px "Orbitron", system-ui';
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 10;
+    const countdownSec = (Math.max(0, remainingMs) / 1000).toFixed(1);
+    ctx.fillText(`${subtitle.toUpperCase()} — INCOMING IN ${countdownSec}s`, w / 2, bannerY + 22);
+
     ctx.restore();
   }
 }

@@ -119,6 +119,54 @@ def test_reject_zero_caught_with_score():
     response = client.post("/api/leaderboard", json=payload)
     assert response.status_code == 422
 
+def test_submit_precision_score():
+    payload = {
+        "playerName": "SNIPER",
+        "score": 1800,
+        "maxCombo": 22,
+        "caught": 35,
+        "missed": 0,
+        "accuracy": 100.0,
+        "mode": "PRECISION"
+    }
+    response = client.post("/api/leaderboard", json=payload)
+    assert response.status_code == 201
+    data = response.json()
+    assert data["playerName"] == "SNIPER"
+    assert data["mode"] == "PRECISION"
+
+def test_submit_daily_challenge_score():
+    payload = {
+        "playerName": "CHALLENGER",
+        "score": 2100,
+        "maxCombo": 25,
+        "caught": 42,
+        "missed": 2,
+        "accuracy": 95.4,
+        "mode": "DAILY_CHALLENGE"
+    }
+    response = client.post("/api/leaderboard", json=payload)
+    assert response.status_code == 201
+    data = response.json()
+    assert data["playerName"] == "CHALLENGER"
+    assert data["mode"] == "DAILY_CHALLENGE"
+
+def test_submit_boss_rush_score():
+    payload = {
+        "playerName": "BOSS_SLAYER",
+        "score": 3500,
+        "maxCombo": 30,
+        "caught": 50,
+        "missed": 3,
+        "accuracy": 94.3,
+        "mode": "BOSS_RUSH"
+    }
+    response = client.post("/api/leaderboard", json=payload)
+    assert response.status_code == 201
+    data = response.json()
+    assert data["playerName"] == "BOSS_SLAYER"
+    assert data["mode"] == "BOSS_RUSH"
+
 def test_reset_leaderboard_with_admin_key():
     headers = {"X-Admin-Key": settings.admin_key}
     response = client.delete("/api/leaderboard?mode=SURVIVAL", headers=headers)
@@ -126,3 +174,4 @@ def test_reset_leaderboard_with_admin_key():
     data = response.json()
     assert data["status"] == "success"
     assert data["mode"] == "SURVIVAL"
+

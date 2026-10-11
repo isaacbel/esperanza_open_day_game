@@ -20,7 +20,10 @@ class LeaderboardCreate(BaseModel):
         "NIGHTMARE",
         "TRAINING",
         "TUTORIAL",
-        "ENDLESS"
+        "ENDLESS",
+        "PRECISION",
+        "DAILY_CHALLENGE",
+        "BOSS_RUSH"
     ] = Field("NORMAL", description="Game mode")
 
     @field_validator("playerName", mode="before")

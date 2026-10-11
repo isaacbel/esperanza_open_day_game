@@ -1278,15 +1278,74 @@ body {
   gap: 6px;
 }
 
-.ach-tag {
-  background: rgba(255, 215, 0, 0.2);
-  border: 1px solid var(--gold);
-  color: #ffffff;
+/* ---------- AI Performance Coach Card in Game Over ---------- */
+.ai-coach-card {
+  background: rgba(0, 240, 255, 0.06);
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  text-align: left;
+}
+
+.ai-coach-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.ai-coach-title {
   font-family: var(--font-hud);
-  font-size: 0.62rem;
-  font-weight: 700;
-  padding: 3px 8px;
-  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--cyan);
+  letter-spacing: 0.12em;
+}
+
+.spatial-balance-bar {
+  display: flex;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.1);
+  margin-bottom: 8px;
+}
+
+.balance-left {
+  background: #38bdf8;
+  transition: width 0.4s ease;
+}
+
+.balance-center {
+  background: #a78bfa;
+  transition: width 0.4s ease;
+}
+
+.balance-right {
+  background: #34d399;
+  transition: width 0.4s ease;
+}
+
+.spatial-stats-row {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-hud);
+  font-size: 0.64rem;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+.ai-insight-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ai-insight-item {
+  font-size: 0.74rem;
+  color: var(--text-primary);
+  line-height: 1.4;
 }
 
 

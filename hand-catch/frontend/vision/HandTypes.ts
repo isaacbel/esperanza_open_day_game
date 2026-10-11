@@ -240,7 +240,10 @@ export type GameMode =
   | 'NIGHTMARE'
   | 'TRAINING'
   | 'TUTORIAL'
-  | 'ENDLESS';
+  | 'ENDLESS'
+  | 'PRECISION'
+  | 'DAILY_CHALLENGE'
+  | 'BOSS_RUSH';
 export type QualityLevel = 'ULTRA' | 'HIGH' | 'MEDIUM' | 'LOW';
 
 export type CameraGuidance =

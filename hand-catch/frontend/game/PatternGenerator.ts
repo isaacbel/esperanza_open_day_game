@@ -32,7 +32,11 @@ export type PatternName =
   | 'TWO_SIDE_ATTACK'
   | 'CENTER_ATTACK'
   | 'CHAOS'
-  | 'FINAL_RUSH';
+  | 'FINAL_RUSH'
+  | 'BOSS_SWARM'
+  | 'BOSS_CROSSFIRE'
+  | 'BOSS_WARP'
+  | 'BOSS_HAZARD_TRIAL';
 
 export interface PatternSpawnItem {
   x: number;
@@ -41,6 +45,25 @@ export interface PatternSpawnItem {
   movement: ColumnMovement;
   speedMultiplier: number; // 0.72 (slow) to 1.45 (very fast)
   widthMultiplier: number;
+}
+
+export function createMulberry32(seed: number): () => number {
+  let s = seed | 0;
+  return function() {
+    s = (s + 0x6d2b79f5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+export function getDailySeed(dateStr?: string): number {
+  const date = dateStr || new Date().toISOString().slice(0, 10);
+  let hash = 0;
+  for (let i = 0; i < date.length; i++) {
+    hash = ((hash << 5) - hash + date.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
 }
 
 export class PatternGenerator {
@@ -57,7 +80,8 @@ export class PatternGenerator {
     difficulty: number,
     baseSpeed: number,
     level: number,
-    forcedType?: ColumnType
+    forcedType?: ColumnType,
+    rng: () => number = Math.random
   ): PatternSpawnItem[] {
     const minX = this.ARENA_MIN_X;
     const maxX = this.ARENA_MAX_X;
@@ -322,13 +346,51 @@ export class PatternGenerator {
         ];
       }
 
+      case 'BOSS_SWARM': {
+        return [
+          { x: minX + 80, delayMs: 0, type: 'fast', movement: 'vertical', speedMultiplier: 1.2, widthMultiplier: 0.88 },
+          { x: minX + 240, delayMs: 150, type: 'fast', movement: 'accel', speedMultiplier: 1.25, widthMultiplier: 0.88 },
+          { x: center, delayMs: 300, type: 'combo', movement: 'vertical', speedMultiplier: 1.2, widthMultiplier: 0.88 },
+          { x: maxX - 240, delayMs: 450, type: 'fast', movement: 'accel', speedMultiplier: 1.25, widthMultiplier: 0.88 },
+          { x: maxX - 80, delayMs: 600, type: 'gold', movement: 'vertical', speedMultiplier: 1.3, widthMultiplier: 0.88 }
+        ];
+      }
+
+      case 'BOSS_CROSSFIRE': {
+        return [
+          { x: minX + 70, delayMs: 0, type: 'fast', movement: 'diagonal', speedMultiplier: 1.25, widthMultiplier: 0.88 },
+          { x: maxX - 70, delayMs: 0, type: 'fast', movement: 'diagonal', speedMultiplier: 1.25, widthMultiplier: 0.88 },
+          { x: minX + 200, delayMs: 250, type: 'fast', movement: 'diagonal', speedMultiplier: 1.25, widthMultiplier: 0.88 },
+          { x: maxX - 200, delayMs: 250, type: 'gold', movement: 'diagonal', speedMultiplier: 1.25, widthMultiplier: 0.88 }
+        ];
+      }
+
+      case 'BOSS_WARP': {
+        return [
+          { x: center - 160, delayMs: 0, type: 'teleport', movement: 'wave', speedMultiplier: 1.0, widthMultiplier: 0.9 },
+          { x: center + 160, delayMs: 140, type: 'ghost', movement: 'wave', speedMultiplier: 1.0, widthMultiplier: 0.9 },
+          { x: minX + 120, delayMs: 320, type: 'multiplier', movement: 'zigzag', speedMultiplier: 1.2, widthMultiplier: 0.88 },
+          { x: maxX - 120, delayMs: 320, type: 'slow', movement: 'zigzag', speedMultiplier: 1.2, widthMultiplier: 0.88 }
+        ];
+      }
+
+      case 'BOSS_HAZARD_TRIAL': {
+        return [
+          { x: minX + 100, delayMs: 0, type: 'hazard', movement: 'vertical', speedMultiplier: 1.0, widthMultiplier: 1.0 },
+          { x: maxX - 100, delayMs: 0, type: 'hazard', movement: 'vertical', speedMultiplier: 1.0, widthMultiplier: 1.0 },
+          { x: center, delayMs: 220, type: 'gold', movement: 'accel', speedMultiplier: 1.2, widthMultiplier: 1.0 },
+          { x: center - 140, delayMs: 440, type: 'combo', movement: 'vertical', speedMultiplier: 1.15, widthMultiplier: 0.9 },
+          { x: center + 140, delayMs: 440, type: 'combo', movement: 'vertical', speedMultiplier: 1.15, widthMultiplier: 0.9 }
+        ];
+      }
+
       default:
         return [{ x: center, delayMs: 0, type: 'normal', movement: 'vertical', speedMultiplier: 1.0, widthMultiplier: 1.0 }];
     }
   }
 
-  private static pickRandomType(): ColumnType {
-    const roll = Math.random();
+  private static pickRandomType(rng: () => number = Math.random): ColumnType {
+    const roll = rng();
     const sc = GAME_CONFIG.specialChance;
     if (roll < sc.gold) return 'gold';
     if (roll < sc.gold + sc.heart) return 'heart';
@@ -338,7 +400,7 @@ export class PatternGenerator {
     if (roll < sc.gold + sc.heart + sc.fast + sc.multiplier + sc.slow + sc.combo) return 'combo';
     if (roll < sc.gold + sc.heart + sc.fast + sc.multiplier + sc.slow + sc.combo + 0.04) return 'teleport';
     if (roll < sc.gold + sc.heart + sc.fast + sc.multiplier + sc.slow + sc.combo + 0.08) return 'ghost';
-    if (GAME_CONFIG.enableHazards && Math.random() < GAME_CONFIG.hazardChance) return 'hazard';
+    if (GAME_CONFIG.enableHazards && rng() < GAME_CONFIG.hazardChance) return 'hazard';
     return 'normal';
   }
 }

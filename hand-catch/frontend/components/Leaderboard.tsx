@@ -66,6 +66,21 @@ const DEFAULT_BENCHMARKS: Record<GameMode, LeaderboardItem[]> = {
     { playerName: 'TITAN', score: 740, maxCombo: 16, caught: 52, mode: 'ENDLESS' },
     { playerName: 'GHOST', score: 520, maxCombo: 12, caught: 38, mode: 'ENDLESS' },
     { playerName: 'VALKYRIE', score: 360, maxCombo: 9, caught: 27, mode: 'ENDLESS' },
+  ],
+  PRECISION: [
+    { playerName: 'DEADEYE', score: 1240, maxCombo: 26, caught: 48, mode: 'PRECISION' },
+    { playerName: 'BULLSEYE', score: 910, maxCombo: 20, caught: 36, mode: 'PRECISION' },
+    { playerName: 'SURGEON', score: 650, maxCombo: 14, caught: 28, mode: 'PRECISION' },
+  ],
+  DAILY_CHALLENGE: [
+    { playerName: 'TOP_CHALLENGER', score: 1450, maxCombo: 28, caught: 58, mode: 'DAILY_CHALLENGE' },
+    { playerName: 'DAILY_RUNNER', score: 1080, maxCombo: 22, caught: 44, mode: 'DAILY_CHALLENGE' },
+    { playerName: 'DAY_ONE', score: 720, maxCombo: 15, caught: 32, mode: 'DAILY_CHALLENGE' },
+  ],
+  BOSS_RUSH: [
+    { playerName: 'SLAYER', score: 2450, maxCombo: 36, caught: 85, mode: 'BOSS_RUSH' },
+    { playerName: 'WARLORD', score: 1820, maxCombo: 28, caught: 66, mode: 'BOSS_RUSH' },
+    { playerName: 'GLADIATOR', score: 1290, maxCombo: 20, caught: 48, mode: 'BOSS_RUSH' },
   ]
 };
 

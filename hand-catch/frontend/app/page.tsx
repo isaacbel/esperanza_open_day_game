@@ -540,12 +540,28 @@ export default function HandCatchPage() {
               </div>
             </div>
 
-            {gameOverStats.achievementsUnlocked && gameOverStats.achievementsUnlocked.length > 0 && (
-              <div className="unlocked-achievements-banner">
-                <span className="ach-banner-title">🎉 UNLOCKED ACHIEVEMENTS:</span>
-                <div className="ach-tags">
-                  {gameOverStats.achievementsUnlocked.map((title, i) => (
-                    <span key={i} className="ach-tag">🏆 {title}</span>
+            {/* AI Performance Coach & Spatial Analytics (W-006) */}
+            {gameOverStats.spatialInsights && gameOverStats.spatialInsights.length > 0 && (
+              <div className="ai-coach-card">
+                <div className="ai-coach-header">
+                  <span className="ai-coach-title">🧠 AI PERFORMANCE COACH</span>
+                  <span style={{ fontSize: '0.62rem', color: 'var(--cyan-dim)', fontFamily: 'var(--font-hud)' }}>
+                    DOMINANT: {gameOverStats.dominantSide?.toUpperCase() || 'BALANCED'}
+                  </span>
+                </div>
+                <div className="spatial-balance-bar">
+                  <div className="balance-left" style={{ width: `${gameOverStats.leftAccuracy || 33}%` }} title={`Left: ${gameOverStats.leftAccuracy}%`} />
+                  <div className="balance-center" style={{ width: `${gameOverStats.centerAccuracy || 34}%` }} title={`Center: ${gameOverStats.centerAccuracy}%`} />
+                  <div className="balance-right" style={{ width: `${gameOverStats.rightAccuracy || 33}%` }} title={`Right: ${gameOverStats.rightAccuracy}%`} />
+                </div>
+                <div className="spatial-stats-row">
+                  <span>LEFT: {gameOverStats.leftAccuracy ?? 100}%</span>
+                  <span>CENTER: {gameOverStats.centerAccuracy ?? 100}%</span>
+                  <span>RIGHT: {gameOverStats.rightAccuracy ?? 100}%</span>
+                </div>
+                <div className="ai-insight-list">
+                  {gameOverStats.spatialInsights.map((insight, i) => (
+                    <div key={i} className="ai-insight-item">{insight}</div>
                   ))}
                 </div>
               </div>

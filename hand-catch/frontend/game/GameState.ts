@@ -21,6 +21,12 @@ export interface GameOverStats {
   playerTitle?: string;
   handControlRating?: number;
   achievementsUnlocked?: string[];
+  spatialInsights?: string[];
+  weakSide?: string;
+  dominantSide?: string;
+  leftAccuracy?: number;
+  rightAccuracy?: number;
+  centerAccuracy?: number;
   mode: GameMode;
   playerName: string;
   reason: string;

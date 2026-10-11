@@ -82,6 +82,36 @@ const MODES: {
     accentColor: '#fb923c'
   },
   {
+    id: 'PRECISION',
+    label: 'PRECISION',
+    icon: '🎯',
+    sub: 'Center Palm Accuracy',
+    desc: 'Score multipliers graded by palm center alignment (PERFECT/GREAT/GOOD/GRAZE).',
+    difficulty: 4,
+    badge: 'SKILL',
+    accentColor: '#38bdf8'
+  },
+  {
+    id: 'DAILY_CHALLENGE',
+    label: 'DAILY SEED',
+    icon: '📅',
+    sub: 'Global Daily Gauntlet',
+    desc: 'Deterministic daily seed: compete against all players globally on the exact same pattern.',
+    difficulty: 3,
+    badge: 'DAILY',
+    accentColor: '#fbbf24'
+  },
+  {
+    id: 'BOSS_RUSH',
+    label: 'BOSS RUSH',
+    icon: '⚔️',
+    sub: '5-Wave Apex Gauntlet',
+    desc: 'Sequential boss waves: Swarm, Crossfire, Warp, Hazard Trial & Climax.',
+    difficulty: 5,
+    badge: 'BOSS',
+    accentColor: '#f43f5e'
+  },
+  {
     id: 'NIGHTMARE',
     label: 'NIGHTMARE',
     icon: '🔥',
@@ -95,8 +125,8 @@ const MODES: {
     id: 'TUTORIAL',
     label: 'TUTORIAL',
     icon: '🎓',
-    sub: 'Guided First Steps',
-    desc: 'Step-by-step guide: learn to catch, deflect, and use both hands.',
+    sub: '8-Step Guided Mastery',
+    desc: 'Master the full vision pipeline: catches, dual hands, deflections, time freeze & bursts.',
     difficulty: 1,
     accentColor: '#60a5fa'
   }

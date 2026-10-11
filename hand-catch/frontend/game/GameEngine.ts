@@ -104,6 +104,9 @@ export class GameEngine {
     this.timeDilationTimer = 0;
     this.grabCount = 0;
 
+    // Serene Zen mode flag
+    this.arenaRenderer.isZenMode = (mode === 'ZEN');
+
     // FIX BUG-004: reset newly-unlocked list so previous session achievements don't leak
     AchievementSystem.newlyUnlocked = [];
 
@@ -185,7 +188,8 @@ export class GameEngine {
       this.lives,
       trackedHands,
       this.scoreSystem.getAccuracy(),
-      this.scoreSystem.combo
+      this.scoreSystem.combo,
+      this.scoreSystem.missStreak
     );
     this.scoreSystem.totalSpawned += spawned;
 
@@ -293,12 +297,36 @@ export class GameEngine {
 
     // Reaction Time measurement & score registration
     const levelBonus = this.spawnDirector.currentLevelDef.scoreMultiplierBonus;
-    const { points: basePoints, multiplier, isMilestone } = this.scoreSystem.registerCatch(
-      col.scoreMultiplier,
-      col.spawnTime,
-      performance.now(),
-      levelBonus
-    );
+    let basePoints = 0;
+    let multiplier = 1;
+    let isMilestone = false;
+
+    if (this.mode === 'PRECISION') {
+      const palmDist = Math.hypot(hand.palm.x - col.x, hand.palm.y - (col.y + col.height * 0.5));
+      const precResult = this.scoreSystem.registerPrecisionCatch(
+        palmDist,
+        col.scoreMultiplier,
+        col.spawnTime,
+        performance.now(),
+        levelBonus
+      );
+      basePoints = precResult.points;
+      multiplier = precResult.multiplier;
+      isMilestone = precResult.isMilestone;
+      const gradeColor = precResult.grade === 'PERFECT' ? '#ffd700' : precResult.grade === 'GREAT' ? '#00f0ff' : precResult.grade === 'GOOD' ? '#00ff88' : '#ff9900';
+      gestureTag = `${precResult.grade}!`;
+      this.particleSystem.addPopup(x, y - 24, `${precResult.grade}!`, `${(precResult.gradeMultiplier * 100).toFixed(0)}% PTS`, gradeColor, precResult.grade === 'PERFECT');
+    } else {
+      const regResult = this.scoreSystem.registerCatch(
+        col.scoreMultiplier,
+        col.spawnTime,
+        performance.now(),
+        levelBonus
+      );
+      basePoints = regResult.points;
+      multiplier = regResult.multiplier;
+      isMilestone = regResult.isMilestone;
+    }
 
     if (gestureBonus > 0) {
       this.scoreSystem.addScore(gestureBonus * multiplier);
@@ -407,8 +435,25 @@ export class GameEngine {
     }
 
     col.state = 'missed';
-    this.scoreSystem.registerMiss();
-    this.spawnDirector.playerModel.recordAttempt(col.x);
+    this.spawnDirector.playerModel.recordMiss(col.x);
+
+    // Near-Miss Combo Protection: If hand was within 140px, retain 50% combo instead of reset to 0
+    let isNearMiss = false;
+    for (const hand of trackedHands) {
+      if (!hand.active) continue;
+      const d = Math.hypot(hand.palm.x - col.x, hand.palm.y - (col.y + col.height));
+      if (d < 140) {
+        isNearMiss = true;
+        break;
+      }
+    }
+
+    if (isNearMiss && this.scoreSystem.combo >= 4) {
+      this.scoreSystem.saveComboNearMiss(0.5);
+      this.particleSystem.addPopup(col.x, GAME_CONFIG.arena.floorY - 25, 'NEAR MISS!', 'COMBO RETAINED (50%)', '#00e5ff', true);
+    } else {
+      this.scoreSystem.registerMiss();
+    }
 
     const floorX = col.x;
     const floorY = GAME_CONFIG.arena.floorY;
@@ -463,6 +508,7 @@ export class GameEngine {
 
     const currentProg = ProgressionSystem.getProgression();
     const handControl = this.spawnDirector.playerModel.getHandControlRating();
+    const spatialBreakdown = this.spawnDirector.playerModel.getSpatialBreakdown();
 
     const stats: GameOverStats = {
       score: this.scoreSystem.score,
@@ -481,6 +527,12 @@ export class GameEngine {
       playerTitle: currentProg.title,
       handControlRating: handControl,
       achievementsUnlocked: AchievementSystem.newlyUnlocked.map(a => a.title),
+      spatialInsights: spatialBreakdown.insights,
+      weakSide: spatialBreakdown.weakSide,
+      dominantSide: spatialBreakdown.dominantSide,
+      leftAccuracy: spatialBreakdown.leftAccuracy,
+      rightAccuracy: spatialBreakdown.rightAccuracy,
+      centerAccuracy: spatialBreakdown.centerAccuracy,
       mode: this.mode,
       playerName: this.playerName,
       reason
@@ -548,6 +600,17 @@ export class GameEngine {
       ctx.fillStyle = 'rgba(0, 240, 255, 0.08)';
       ctx.fillRect(0, 0, GAME_CONFIG.logicalWidth, GAME_CONFIG.logicalHeight);
       ctx.restore();
+    }
+
+    // 8.5. Boss & Challenge Pre-Warning Overlay
+    if (this.spawnDirector.bossWarningActive) {
+      this.arenaRenderer.renderBossWarningOverlay(
+        ctx,
+        this.spawnDirector.bossWarningTitle,
+        this.spawnDirector.bossWarningSubtitle,
+        this.spawnDirector.bossWarningColor,
+        this.spawnDirector.bossWarningEndTime - performance.now()
+      );
     }
 
     // 9. In-Game Canvas HUD
@@ -725,7 +788,7 @@ export class GameEngine {
       ctx.fillText('🧘 ZEN MODE', GAME_CONFIG.logicalWidth - 40, 36);
     }
 
-    // In-Game Tutorial Guidance Prompts
+    // In-Game Tutorial Guidance Prompts (8-Step Mastery)
     if (this.mode === 'TUTORIAL') {
       ctx.save();
       ctx.textAlign = 'center';
@@ -734,16 +797,37 @@ export class GameEngine {
       ctx.shadowColor = '#00f0ff';
       ctx.shadowBlur = 10;
 
-      let guideText = '🖐 OPEN YOUR HAND — MOVE TOWARDS THE FALLING COLUMNS';
+      let guideText = '🖐 STEP 1/8: OPEN HAND — CATCH THE CENTER ORB';
       if (this.spawnDirector.tutorialStep === 2) {
-        guideText = '👐 USE BOTH HANDS — CATCH SIMULTANEOUS TARGETS';
+        guideText = '👐 STEP 2/8: DUAL HANDS — CATCH BOTH TARGETS SIMULTANEOUSLY';
       } else if (this.spawnDirector.tutorialStep === 3) {
-        guideText = '💥 SWIPE FAST TO DEFLECT RED BOMBS!';
+        guideText = '💥 STEP 3/8: RED BOMBS — SWIPE FAST TO DEFLECT SAFELY!';
         ctx.fillStyle = '#ff2a5f';
         ctx.shadowColor = '#ff2a5f';
       } else if (this.spawnDirector.tutorialStep === 4) {
-        guideText = '🎉 TUTORIAL COMPLETE — READY FOR ARCADE!';
+        guideText = '❄️ STEP 4/8: CYAN ICE ORB — FREEZES TIME IN SLOW-MOTION!';
         ctx.fillStyle = '#00ffaa';
+        ctx.shadowColor = '#00ffaa';
+      } else if (this.spawnDirector.tutorialStep === 5) {
+        guideText = '⭐ STEP 5/8: GOLDEN ORB — SURGES COMBO & MULTIPLIER!';
+        ctx.fillStyle = '#ffd700';
+        ctx.shadowColor = '#ffd700';
+      } else if (this.spawnDirector.tutorialStep === 6) {
+        guideText = '〰️ STEP 6/8: ALTERNATING WAVE — DYNAMIC REFLEX TRACKING';
+        ctx.fillStyle = '#bf00ff';
+        ctx.shadowColor = '#bf00ff';
+      } else if (this.spawnDirector.tutorialStep === 7) {
+        guideText = '🌀 STEP 7/8: QUANTUM WARP — INTERCEPT TELEPORTING TARGETS';
+        ctx.fillStyle = '#00e5ff';
+        ctx.shadowColor = '#00e5ff';
+      } else if (this.spawnDirector.tutorialStep === 8) {
+        guideText = '⚡ STEP 8/8: RAPID BURST TRIAL — CATCH THEM ALL!';
+        ctx.fillStyle = '#ff007f';
+        ctx.shadowColor = '#ff007f';
+      } else if (this.spawnDirector.tutorialStep >= 9) {
+        guideText = '🎉 TUTORIAL COMPLETE — YOU ARE READY FOR ARCADE!';
+        ctx.fillStyle = '#00ffaa';
+        ctx.shadowColor = '#00ffaa';
       }
       ctx.fillText(guideText, GAME_CONFIG.logicalWidth / 2, 540);
       ctx.restore();

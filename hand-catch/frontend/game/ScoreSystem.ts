@@ -11,6 +11,8 @@
  */
 import { GAME_CONFIG } from './GameConfig';
 
+export type PrecisionGrade = 'PERFECT' | 'GREAT' | 'GOOD' | 'GRAZE';
+
 export class ScoreSystem {
   public score: number = 0;
   public displayScore: number = 0;
@@ -22,6 +24,10 @@ export class ScoreSystem {
   public comboScale: number = 1.0;
   public highestLevelName: string = 'LEVEL 1 — WARM UP';
   public highestLevelNumber: number = 1;
+
+  // Streaks for adaptive difficulty & HUD cues
+  public catchStreak: number = 0;
+  public missStreak: number = 0;
 
   // Reaction time samples (in seconds)
   public reactionTimes: number[] = [];
@@ -39,6 +45,8 @@ export class ScoreSystem {
     this.caught = 0;
     this.missed = 0;
     this.totalSpawned = 0;
+    this.catchStreak = 0;
+    this.missStreak = 0;
     this.comboScale = 1.0;
     this.highestLevelName = 'LEVEL 1 — WARM UP';
     this.highestLevelNumber = 1;
@@ -61,10 +69,22 @@ export class ScoreSystem {
 
   public boostCombo(amount: number = 3): void {
     this.combo += amount;
+    this.catchStreak += amount;
+    this.missStreak = 0;
     if (this.combo > this.maxCombo) {
       this.maxCombo = this.combo;
     }
     this.comboScale = 1.6;
+  }
+
+  public saveComboNearMiss(retentionRatio: number = 0.5): number {
+    this.missed++;
+    this.missStreak++;
+    this.catchStreak = 0;
+    const oldCombo = this.combo;
+    this.combo = Math.max(1, Math.floor(this.combo * retentionRatio));
+    this.comboScale = 1.2;
+    return oldCombo - this.combo;
   }
 
   public registerCatch(
@@ -75,6 +95,8 @@ export class ScoreSystem {
   ): { points: number; multiplier: number; isMilestone: boolean } {
     this.caught++;
     this.combo++;
+    this.catchStreak++;
+    this.missStreak = 0;
     if (this.combo > this.maxCombo) {
       this.maxCombo = this.combo;
     }
@@ -84,7 +106,6 @@ export class ScoreSystem {
     if (spawnTime > 0) {
       const reactionSec = Math.max(0.10, Math.min(1.8, (catchTime - spawnTime) / 1000));
       this.reactionTimes.push(reactionSec);
-      // FIX BUG-001: was `if (reactionSec < this.bestReactionTime)` — null < number is always false
       if (this.bestReactionTime === undefined || reactionSec < this.bestReactionTime) {
         this.bestReactionTime = Math.round(reactionSec * 100) / 100;
       }
@@ -102,8 +123,53 @@ export class ScoreSystem {
     return { points, multiplier, isMilestone };
   }
 
+  /**
+   * Precision mode catch evaluator: assigns PERFECT, GREAT, GOOD, or GRAZE based on center alignment
+   */
+  public registerPrecisionCatch(
+    distanceFromCenter: number,
+    typeMultiplier: number = 1,
+    spawnTime: number = 0,
+    catchTime: number = performance.now(),
+    levelMultiplierBonus: number = 1.0
+  ): { points: number; multiplier: number; grade: PrecisionGrade; gradeMultiplier: number; isMilestone: boolean } {
+    let grade: PrecisionGrade = 'GOOD';
+    let gradeMultiplier = 1.0;
+
+    if (distanceFromCenter < 28) {
+      grade = 'PERFECT';
+      gradeMultiplier = 2.0;
+      this.combo += 1; // bonus combo
+    } else if (distanceFromCenter < 52) {
+      grade = 'GREAT';
+      gradeMultiplier = 1.5;
+    } else if (distanceFromCenter < 85) {
+      grade = 'GOOD';
+      gradeMultiplier = 1.0;
+    } else {
+      grade = 'GRAZE';
+      gradeMultiplier = 0.5;
+    }
+
+    const baseResult = this.registerCatch(typeMultiplier, spawnTime, catchTime, levelMultiplierBonus);
+    const precisionPoints = Math.round(baseResult.points * gradeMultiplier);
+
+    // Replace the base points with precision points
+    this.score = this.score - baseResult.points + precisionPoints;
+
+    return {
+      points: precisionPoints,
+      multiplier: baseResult.multiplier,
+      grade,
+      gradeMultiplier,
+      isMilestone: baseResult.isMilestone
+    };
+  }
+
   public registerMiss(): void {
     this.missed++;
+    this.missStreak++;
+    this.catchStreak = 0;
     this.combo = 0;
     this.comboScale = 1.0;
   }
